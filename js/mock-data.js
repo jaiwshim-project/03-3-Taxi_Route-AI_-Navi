@@ -183,3 +183,40 @@ function getDemandGrade(score) {
   if (score >= 40) return { grade: 'C', color: 'text-green-600 bg-green-50', label: '하' };
   return { grade: 'D', color: 'text-gray-600 bg-gray-50', label: '최하' };
 }
+
+/* ── 한강 남북 구분 (다리 건너기 방지) ── */
+var NORTH_DISTRICTS = ['종로구', '중구', '용산구', '성동구', '광진구', '동대문구', '중랑구', '성북구', '강북구', '도봉구', '노원구', '은평구', '서대문구', '마포구'];
+var SOUTH_DISTRICTS = ['양천구', '강서구', '구로구', '금천구', '영등포구', '동작구', '관악구', '서초구', '강남구', '송파구', '강동구'];
+
+/* 구 이름으로 한강 남/북 판별 */
+function getDistrictRiverSide(districtName) {
+  if (NORTH_DISTRICTS.indexOf(districtName) !== -1) return 'north';
+  if (SOUTH_DISTRICTS.indexOf(districtName) !== -1) return 'south';
+  return 'unknown';
+}
+
+/* 좌표로 한강 남/북 판별 (한강 근사선 기준) */
+function getRiverSideByCoords(lat, lng) {
+  // 한강은 서쪽(마포)~동쪽(강동) 약간 남쪽으로 흐름
+  // 근사: lat ≈ 37.527 (서쪽) ~ 37.520 (동쪽)
+  var riverLat = 37.5355 - 0.05 * (lng - 126.90);
+  return lat > riverLat ? 'north' : 'south';
+}
+
+/* 핫스팟의 한강 남/북 판별 (구 이름 우선, 없으면 좌표) */
+function getHotspotRiverSide(hs) {
+  if (hs.district) {
+    var side = getDistrictRiverSide(hs.district);
+    if (side !== 'unknown') return side;
+  }
+  return getRiverSideByCoords(hs.lat, hs.lng);
+}
+
+/* 출발지와 같은 한강 쪽 핫스팟만 필터링 */
+function filterHotspotsBySameRiverSide(hotspots, startLat, startLng) {
+  var startSide = getRiverSideByCoords(startLat, startLng);
+  return hotspots.filter(function(hs) {
+    var hsSide = getHotspotRiverSide(hs);
+    return hsSide === startSide || hsSide === 'unknown';
+  });
+}

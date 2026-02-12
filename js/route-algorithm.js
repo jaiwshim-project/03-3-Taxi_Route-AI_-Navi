@@ -264,6 +264,11 @@ function planEmptyCarRoute(currentPos, hotspots, hour, dayOfWeek, weather, maxSt
   priority = priority || 'balanced';
   hour = hour !== undefined ? hour : new Date().getHours();
 
+  // 0. 한강 다리 건너기 방지: 출발지와 같은 쪽 핫스팟만 사용
+  if (typeof filterHotspotsBySameRiverSide === 'function') {
+    hotspots = filterHotspotsBySameRiverSide(hotspots, currentPos.lat, currentPos.lng);
+  }
+
   // 1. 각 핫스팟의 수요 점수 + 출발지 거리 계산
   var scored = hotspots.map(function(hs) {
     var score = calculateDemandScore(hs, hour, dayOfWeek, weather);
