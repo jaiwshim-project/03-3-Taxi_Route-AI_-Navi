@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>요금제 — 택시내비AI</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/variable/pretendardvariable.min.css">
+  <link rel="stylesheet" href="css/custom.css">
+</head>
+<body class="bg-gray-50 text-gray-900 min-h-screen flex flex-col">
+
+<!-- 헤더 -->
+<div id="app-header"></div>
+
+<!-- 메인 콘텐츠 -->
+<main class="flex-1">
+
+  <!-- 히어로 섹션 -->
+  <section class="bg-gradient-to-br from-amber-50 via-orange-50 to-yellow-50 py-16 sm:py-20">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 text-center animate-fade-in-up">
+      <div class="inline-flex items-center gap-2 bg-amber-100 text-amber-700 px-4 py-1.5 rounded-full text-sm font-medium mb-6">
+        &#x1F389; 연간 결제 시 2개월 무료
+      </div>
+      <h1 class="text-3xl sm:text-4xl lg:text-5xl font-bold text-gray-900 mb-4">
+        나에게 맞는 <span class="gradient-text">요금제</span>를 선택하세요
+      </h1>
+      <p class="text-gray-600 text-lg max-w-2xl mx-auto">
+        빈차 시간을 줄이고 수익을 높이는 AI 택시 내비게이션.<br>
+        무료 체험부터 시작해 필요에 따라 업그레이드하세요.
+      </p>
+      <!-- 월간/연간 토글 -->
+      <div class="flex items-center justify-center gap-3 mt-8" id="billing-toggle">
+        <span class="text-sm font-medium text-gray-700" id="label-monthly">월간 결제</span>
+        <button id="toggle-btn" onclick="toggleBilling()" class="relative w-14 h-7 rounded-full bg-gray-300 transition-colors duration-300">
+          <div id="toggle-dot" class="absolute top-0.5 left-0.5 w-6 h-6 bg-white rounded-full shadow transition-transform duration-300"></div>
+        </button>
+        <span class="text-sm font-medium text-gray-400" id="label-annual">연간 결제 <span class="text-amber-600 font-bold">-17%</span></span>
+      </div>
+    </div>
+  </section>
+
+  <!-- 요금제 카드 3개 -->
+  <section class="max-w-7xl mx-auto px-4 sm:px-6 -mt-4 pb-20">
+    <div class="grid md:grid-cols-3 gap-6 lg:gap-8" id="pricing-cards">
+      <!-- JS로 렌더링 -->
+    </div>
+  </section>
+
+  <!-- 요금제 비교표 -->
+  <section class="bg-white py-16 border-t border-gray-100">
+    <div class="max-w-5xl mx-auto px-4 sm:px-6">
+      <h2 class="text-2xl font-bold text-center text-gray-900 mb-2">요금제 상세 비교</h2>
+      <p class="text-center text-gray-500 mb-10">모든 기능을 한눈에 비교해보세요</p>
+      <div class="overflow-x-auto">
+        <table class="w-full" id="comparison-table">
+          <thead>
+            <tr class="border-b-2 border-gray-200">
+              <th class="py-3 px-4 text-left text-sm font-semibold text-gray-700 w-1/3">기능</th>
+              <th class="py-3 px-4 text-center text-sm font-semibold text-gray-700">무료 체험</th>
+              <th class="py-3 px-4 text-center text-sm font-semibold text-amber-700 bg-amber-50/50 rounded-t-lg">프로</th>
+              <th class="py-3 px-4 text-center text-sm font-semibold text-gray-700">프리미엄</th>
+            </tr>
+          </thead>
+          <tbody id="comparison-tbody">
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- FAQ 섹션 -->
+  <section class="py-16 bg-gray-50">
+    <div class="max-w-3xl mx-auto px-4 sm:px-6">
+      <h2 class="text-2xl font-bold text-center text-gray-900 mb-2">자주 묻는 질문</h2>
+      <p class="text-center text-gray-500 mb-10">궁금한 점이 있으신가요?</p>
+      <div class="space-y-3" id="faq-list">
+      </div>
+    </div>
+  </section>
+
+  <!-- CTA 섹션 -->
+  <section class="bg-gradient-to-r from-amber-500 via-orange-500 to-red-500 py-16">
+    <div class="max-w-3xl mx-auto px-6 text-center text-white">
+      <h2 class="text-2xl sm:text-3xl font-bold mb-4">지금 바로 시작하세요</h2>
+      <p class="text-amber-100 mb-8 text-lg">무료 체험으로 택시내비AI의 효과를 직접 경험해보세요.<br>신용카드 정보 없이 바로 시작할 수 있습니다.</p>
+      <div class="flex items-center justify-center gap-4 flex-wrap">
+        <a href="dashboard.html" class="px-8 py-3.5 bg-white text-amber-700 rounded-xl font-bold hover:bg-amber-50 transition shadow-lg">무료로 시작하기</a>
+        <a href="ai-report.html" class="px-8 py-3.5 bg-white/20 backdrop-blur text-white rounded-xl font-bold hover:bg-white/30 transition">AI 리포트 미리보기</a>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<!-- 푸터 -->
+<div id="app-footer"></div>
+
+<!-- 스크립트 -->
+<script src="js/mock-data.js"></script>
+<script src="js/shared.js"></script>
+<script src="js/demand-engine.js"></script>
+<script>
+(function() {
+  initPage('pricing');
+
+  var isAnnual = false;
+
+  /* ── 요금제 데이터 ── */
+  var plans = [
+    {
+      id: 'free',
+      name: '무료 체험',
+      desc: '택시내비AI의 기본 기능을 무료로 체험하세요',
+      monthlyPrice: 0,
+      annualPrice: 0,
+      highlight: false,
+      badge: '',
+      cta: '무료로 시작하기',
+      ctaStyle: 'bg-gray-900 text-white hover:bg-gray-800',
+      features: [
+        { text: '기본 수요 히트맵', included: true },
+        { text: '일 1회 경로 최적화', included: true },
+        { text: '기본 통계 (오늘/이번주)', included: true },
+        { text: '핫스팟 TOP 5 조회', included: true },
+        { text: '실시간 수요 분석', included: false },
+        { text: '무제한 경로 최적화', included: false },
+        { text: 'AI 전략 리포트', included: false },
+        { text: '수익 시뮬레이션', included: false },
+        { text: '실시간 GPS 추적', included: false },
+        { text: '맞춤 AI 전략', included: false }
+      ]
+    },
+    {
+      id: 'pro',
+      name: '프로',
+      desc: '수익 극대화를 위한 프로 운전기사를 위한 플랜',
+      monthlyPrice: 99000,
+      annualPrice: 82500,
+      highlight: true,
+      badge: '가장 인기',
+      cta: '프로 시작하기',
+      ctaStyle: 'bg-amber-500 text-white hover:bg-amber-600 shadow-lg shadow-amber-200',
+      features: [
+        { text: '실시간 수요 분석', included: true },
+        { text: '무제한 경로 최적화', included: true },
+        { text: 'AI 전략 리포트 (일일)', included: true },
+        { text: '상세 통계 및 분석', included: true },
+        { text: '수익 시뮬레이션', included: true },
+        { text: '구역별 수요 예측', included: true },
+        { text: '시간대별 핫스팟 추천', included: true },
+        { text: '날씨 영향 분석', included: true },
+        { text: '실시간 GPS 추적', included: false },
+        { text: '전담 컨설턴트', included: false }
+      ]
+    },
+    {
+      id: 'premium',
+      name: '프리미엄',
+      desc: '법인택시·다중차량 관리를 위한 엔터프라이즈 플랜',
+      monthlyPrice: 199000,
+      annualPrice: 165800,
+      highlight: false,
+      badge: '최고 성능',
+      cta: '프리미엄 시작하기',
+      ctaStyle: 'bg-gray-900 text-white hover:bg-gray-800',
+      features: [
+        { text: '프로 플랜 전체 기능 포함', included: true },
+        { text: '실시간 GPS 추적 및 관제', included: true },
+        { text: '맞춤 AI 운행 전략', included: true },
+        { text: '전담 컨설턴트 배정', included: true },
+        { text: '다중 차량 관리 (최대 50대)', included: true },
+        { text: '기사별 성과 분석', included: true },
+        { text: '법인 통합 대시보드', included: true },
+        { text: 'API 연동 지원', included: true },
+        { text: '우선 고객 지원 (24시간)', included: true },
+        { text: '월간 전략 컨설팅', included: true }
+      ]
+    }
+  ];
+
+  /* ── 비교표 데이터 ── */
+  var comparisonData = [
+    { feature: '수요 히트맵', free: '기본', pro: '실시간', premium: '실시간 + 예측' },
+    { feature: '경로 최적화', free: '일 1회', pro: '무제한', premium: '무제한 + AI' },
+    { feature: '수익 통계', free: '기본', pro: '상세 분석', premium: '상세 + 법인 통합' },
+    { feature: 'AI 전략 리포트', free: '&#x2715;', pro: '일일 리포트', premium: '일일 + 맞춤 전략' },
+    { feature: '수익 시뮬레이션', free: '&#x2715;', pro: '&#x2713;', premium: '&#x2713;' },
+    { feature: '핫스팟 추천', free: 'TOP 5', pro: '전체 + 실시간', premium: '전체 + 예측' },
+    { feature: '날씨 영향 분석', free: '&#x2715;', pro: '&#x2713;', premium: '&#x2713;' },
+    { feature: 'GPS 추적/관제', free: '&#x2715;', pro: '&#x2715;', premium: '&#x2713;' },
+    { feature: '다중 차량 관리', free: '&#x2715;', pro: '&#x2715;', premium: '최대 50대' },
+    { feature: '전담 컨설턴트', free: '&#x2715;', pro: '&#x2715;', premium: '&#x2713;' },
+    { feature: '고객 지원', free: '이메일', pro: '이메일 + 채팅', premium: '24시간 전담' },
+    { feature: 'API 연동', free: '&#x2715;', pro: '&#x2715;', premium: '&#x2713;' }
+  ];
+
+  /* ── FAQ 데이터 ── */
+  var faqData = [
+    {
+      q: '무료 체험 기간은 얼마나 되나요?',
+      a: '무료 체험은 기간 제한 없이 기본 기능을 사용하실 수 있습니다. 더 많은 기능이 필요할 때 언제든지 프로 또는 프리미엄 플랜으로 업그레이드하실 수 있습니다.'
+    },
+    {
+      q: '연간 결제 시 할인은 어떻게 되나요?',
+      a: '연간 결제 시 월간 요금 대비 약 17% 할인됩니다. 프로 플랜은 월 82,500원(연 990,000원), 프리미엄 플랜은 월 165,800원(연 1,989,600원)으로 이용 가능합니다. 이는 2개월분 요금이 무료인 것과 같습니다.'
+    },
+    {
+      q: '실제로 수익이 얼마나 증가하나요?',
+      a: 'AI 최적화 운행을 적용한 기사분들의 평균 데이터를 기반으로, 기존 경험 기반 운행 대비 약 20~30%의 수익 증가 효과가 확인되었습니다. 특히 빈차 시간이 평균 35% 감소하여 연료비 절감 효과도 큽니다.'
+    },
+    {
+      q: '법인 택시에서도 사용할 수 있나요?',
+      a: '네, 프리미엄 플랜은 법인 택시를 위한 다중 차량 관리(최대 50대) 기능을 제공합니다. 기사별 성과 분석, 통합 대시보드, 관제 시스템 등을 통해 효율적인 차량 운영이 가능합니다. 50대 이상 관리가 필요한 경우 별도 문의해주세요.'
+    },
+    {
+      q: '결제 방법은 어떻게 되나요?',
+      a: '신용카드, 체크카드, 계좌이체를 지원합니다. 법인 고객의 경우 세금계산서 발행이 가능하며, 별도 계약을 통한 결제도 가능합니다.'
+    },
+    {
+      q: '플랜 변경이나 환불은 어떻게 되나요?',
+      a: '언제든지 플랜을 업그레이드하거나 다운그레이드할 수 있습니다. 업그레이드 시 차액만 결제되며, 다운그레이드 시 남은 기간에 대해 비례 환불됩니다. 결제 후 7일 이내 무조건 전액 환불이 가능합니다.'
+    },
+    {
+      q: '데이터 보안은 안전한가요?',
+      a: '모든 데이터는 256비트 SSL 암호화로 전송되며, AWS 서울 리전에 안전하게 저장됩니다. 개인정보 처리방침에 따라 운행 데이터는 분석 용도로만 사용되며, 제3자에게 제공되지 않습니다.'
+    }
+  ];
+
+  /* ── 카드 렌더링 ── */
+  function renderCards() {
+    var html = plans.map(function(plan) {
+      var price = isAnnual ? plan.annualPrice : plan.monthlyPrice;
+      var priceStr = price === 0 ? '무료' : fmt(price) + '원';
+      var periodStr = price === 0 ? '' : '/월';
+      var originalStr = isAnnual && plan.monthlyPrice > 0 ? '<span class="text-sm text-gray-400 line-through ml-2">' + fmt(plan.monthlyPrice) + '원</span>' : '';
+      var savingsStr = isAnnual && plan.monthlyPrice > 0 ? '<div class="text-xs text-amber-600 font-medium mt-1">연간 결제 시 ' + fmt((plan.monthlyPrice - plan.annualPrice) * 12) + '원 절약</div>' : '';
+
+      var borderCls = plan.highlight ? 'border-2 border-amber-400 shadow-xl shadow-amber-100/50 relative' : 'border border-gray-200';
+      var bgCls = plan.highlight ? 'bg-white' : 'bg-white';
+      var badgeHTML = plan.badge ? '<div class="absolute -top-3.5 left-1/2 -translate-x-1/2 bg-amber-500 text-white text-xs font-bold px-4 py-1 rounded-full whitespace-nowrap">' + plan.badge + '</div>' : '';
+      var scaleClass = plan.highlight ? 'md:scale-105 z-10' : '';
+
+      var featuresHTML = plan.features.map(function(f) {
+        var icon = f.included
+          ? '<svg class="w-5 h-5 text-amber-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>'
+          : '<svg class="w-5 h-5 text-gray-300 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>';
+        var textCls = f.included ? 'text-gray-700' : 'text-gray-400';
+        return '<li class="flex items-center gap-3">' + icon + '<span class="text-sm ' + textCls + '">' + f.text + '</span></li>';
+      }).join('');
+
+      return '<div class="' + scaleClass + ' animate-fade-in-up">' +
+        '<div class="' + bgCls + ' ' + borderCls + ' rounded-2xl p-6 sm:p-8 h-full flex flex-col">' +
+          badgeHTML +
+          '<div class="mb-6">' +
+            '<h3 class="text-xl font-bold text-gray-900 mb-1">' + plan.name + '</h3>' +
+            '<p class="text-sm text-gray-500">' + plan.desc + '</p>' +
+          '</div>' +
+          '<div class="mb-6">' +
+            '<div class="flex items-baseline">' +
+              '<span class="text-4xl font-bold text-gray-900">' + priceStr + '</span>' +
+              '<span class="text-gray-500 ml-1">' + periodStr + '</span>' +
+              originalStr +
+            '</div>' +
+            savingsStr +
+          '</div>' +
+          '<a href="dashboard.html" class="block text-center py-3 rounded-xl font-bold transition ' + plan.ctaStyle + ' mb-6">' + plan.cta + '</a>' +
+          '<ul class="space-y-3 flex-1">' + featuresHTML + '</ul>' +
+        '</div>' +
+      '</div>';
+    }).join('');
+    document.getElementById('pricing-cards').innerHTML = html;
+  }
+
+  /* ── 비교표 렌더링 ── */
+  function renderComparison() {
+    var rows = comparisonData.map(function(row, idx) {
+      var bgCls = idx % 2 === 0 ? 'bg-white' : 'bg-gray-50';
+      return '<tr class="' + bgCls + '">' +
+        '<td class="py-3 px-4 text-sm font-medium text-gray-700">' + row.feature + '</td>' +
+        '<td class="py-3 px-4 text-center text-sm text-gray-600">' + row.free + '</td>' +
+        '<td class="py-3 px-4 text-center text-sm font-medium text-amber-700 bg-amber-50/30">' + row.pro + '</td>' +
+        '<td class="py-3 px-4 text-center text-sm text-gray-600">' + row.premium + '</td>' +
+      '</tr>';
+    }).join('');
+    document.getElementById('comparison-tbody').innerHTML = rows;
+  }
+
+  /* ── FAQ 렌더링 ── */
+  function renderFAQ() {
+    var html = faqData.map(function(item, idx) {
+      return '<div class="bg-white rounded-xl border border-gray-200 overflow-hidden">' +
+        '<button onclick="toggleFAQ(' + idx + ')" class="w-full flex items-center justify-between p-5 text-left hover:bg-gray-50 transition">' +
+          '<span class="font-semibold text-gray-900 text-sm sm:text-base pr-4">' + item.q + '</span>' +
+          '<svg id="faq-icon-' + idx + '" class="w-5 h-5 text-gray-400 shrink-0 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>' +
+        '</button>' +
+        '<div id="faq-body-' + idx + '" class="hidden px-5 pb-5">' +
+          '<p class="text-sm text-gray-600 leading-relaxed">' + item.a + '</p>' +
+        '</div>' +
+      '</div>';
+    }).join('');
+    document.getElementById('faq-list').innerHTML = html;
+  }
+
+  /* ── 토글 함수들 (전역) ── */
+  window.toggleBilling = function() {
+    isAnnual = !isAnnual;
+    var btn = document.getElementById('toggle-btn');
+    var dot = document.getElementById('toggle-dot');
+    var labelM = document.getElementById('label-monthly');
+    var labelA = document.getElementById('label-annual');
+    if (isAnnual) {
+      btn.classList.remove('bg-gray-300');
+      btn.classList.add('bg-amber-500');
+      dot.style.transform = 'translateX(28px)';
+      labelM.classList.remove('text-gray-700');
+      labelM.classList.add('text-gray-400');
+      labelA.classList.remove('text-gray-400');
+      labelA.classList.add('text-gray-700');
+    } else {
+      btn.classList.remove('bg-amber-500');
+      btn.classList.add('bg-gray-300');
+      dot.style.transform = 'translateX(0)';
+      labelM.classList.remove('text-gray-400');
+      labelM.classList.add('text-gray-700');
+      labelA.classList.remove('text-gray-700');
+      labelA.classList.add('text-gray-400');
+    }
+    renderCards();
+  };
+
+  window.toggleFAQ = function(idx) {
+    var body = document.getElementById('faq-body-' + idx);
+    var icon = document.getElementById('faq-icon-' + idx);
+    if (body.classList.contains('hidden')) {
+      body.classList.remove('hidden');
+      icon.style.transform = 'rotate(180deg)';
+    } else {
+      body.classList.add('hidden');
+      icon.style.transform = 'rotate(0deg)';
+    }
+  };
+
+  /* ── 수익 예상 데이터 (요금제 효과 강조) ── */
+  var monthly = estimateMonthlyIncome('ai');
+  var monthlyExp = estimateMonthlyIncome('experienced');
+
+  /* ── 초기 렌더링 ── */
+  renderCards();
+  renderComparison();
+  renderFAQ();
+
+})();
+</script>
+</body>
+</html>

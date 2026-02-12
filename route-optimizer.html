@@ -1,0 +1,1543 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>경로 최적화 | 택시내비AI</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <link rel="stylesheet" href="css/custom.css">
+  <style>
+    /* ── 경로 최적화 페이지 전용 스타일 ── */
+    .route-page-body {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
+    }
+    .route-main {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+      position: relative;
+    }
+
+    /* 왼쪽 패널 */
+    .route-left-panel {
+      width: 360px;
+      min-width: 360px;
+      background: #ffffff;
+      border-right: 1px solid #e5e7eb;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      z-index: 20;
+    }
+    .route-left-scroll {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px;
+    }
+    .route-left-scroll::-webkit-scrollbar { width: 5px; }
+    .route-left-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+
+    /* 지도 영역 */
+    .route-map-area {
+      flex: 1;
+      position: relative;
+      display: flex;
+      flex-direction: column;
+    }
+    #routeMap {
+      flex: 1;
+      z-index: 1;
+    }
+
+    /* 하단 패널 */
+    .route-bottom-panel {
+      background: #ffffff;
+      border-top: 2px solid #6b7280;
+      max-height: 0;
+      overflow: hidden;
+      transition: max-height 0.4s ease, padding 0.3s ease;
+      z-index: 10;
+    }
+    .route-bottom-panel.open {
+      max-height: 420px;
+      overflow-y: auto;
+    }
+    .route-bottom-panel::-webkit-scrollbar { width: 5px; }
+    .route-bottom-panel::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+
+    /* 섹션 스타일 */
+    .setting-section {
+      border-radius: 10px;
+      padding: 14px;
+      margin-bottom: 14px;
+      background: #fafafa;
+    }
+    .setting-section-title {
+      font-size: 13px;
+      font-weight: 700;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    /* 슬라이더 */
+    input[type="range"] {
+      -webkit-appearance: none;
+      width: 100%;
+      height: 6px;
+      border-radius: 3px;
+      background: #e2e8f0;
+      outline: none;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: #f59e0b;
+      cursor: pointer;
+      border: 2px solid white;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+    }
+
+    /* 탭 */
+    .tab-btn {
+      padding: 8px 20px;
+      font-size: 13px;
+      font-weight: 600;
+      border-bottom: 2px solid transparent;
+      color: #6b7280;
+      cursor: pointer;
+      transition: all 0.2s;
+      background: none;
+      border-top: none; border-left: none; border-right: none;
+    }
+    .tab-btn:hover { color: #374151; }
+    .tab-btn.active { color: #1f2937; border-bottom-color: #374151; }
+
+    /* 핫스팟 상세 리스트 */
+    .hotspot-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 3px 10px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 600;
+      background: #fef3c7;
+      color: #92400e;
+      border: 1px solid #fde68a;
+    }
+
+    /* 실행 버튼 */
+    .btn-execute {
+      width: 100%;
+      padding: 14px;
+      border-radius: 12px;
+      font-size: 15px;
+      font-weight: 700;
+      color: white;
+      background: linear-gradient(135deg, #f59e0b, #ea580c);
+      border: none;
+      cursor: pointer;
+      transition: all 0.3s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      box-shadow: 0 4px 14px rgba(245,158,11,0.3);
+    }
+    .btn-execute:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(245,158,11,0.4);
+    }
+    .btn-execute:active { transform: translateY(0); }
+    .btn-execute:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      transform: none !important;
+      box-shadow: none !important;
+    }
+
+    /* 맵 위 오버레이 */
+    .map-overlay-badge {
+      position: absolute;
+      z-index: 1000;
+      background: white;
+      border-radius: 10px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.12);
+      padding: 8px 14px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    /* 로딩 오버레이 */
+    .loading-overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(255,255,255,0.85);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      gap: 16px;
+    }
+    .loading-spinner-lg {
+      width: 48px; height: 48px;
+      border: 4px solid #fde68a;
+      border-top-color: #f59e0b;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    /* 하단 패널 토글 핸들 */
+    .bottom-toggle {
+      position: absolute;
+      bottom: 0;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 15;
+      background: white;
+      border: 1px solid #e5e7eb;
+      border-bottom: none;
+      border-radius: 8px 8px 0 0;
+      padding: 4px 24px;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 600;
+      color: #6b7280;
+      display: none;
+      transition: all 0.2s;
+      box-shadow: 0 -2px 6px rgba(0,0,0,0.05);
+    }
+    .bottom-toggle:hover { color: #1f2937; background: #f9fafb; }
+    .bottom-toggle.visible { display: block; }
+
+    /* ── 3개 경로 선택 카드 ── */
+    .route-select-card {
+      border: 2px solid #e5e7eb;
+      border-radius: 12px;
+      padding: 12px;
+      cursor: pointer;
+      transition: all 0.25s ease;
+      position: relative;
+      overflow: hidden;
+    }
+    .route-select-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+    }
+    .route-select-card.selected {
+      box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+    }
+    .route-select-card .route-number {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+      font-size: 14px;
+      color: white;
+      flex-shrink: 0;
+    }
+    .route-select-card .check-badge {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .route-select-card.selected .check-badge {
+      display: flex;
+    }
+
+    /* 경로별 색상 */
+    .route-card-demand { border-color: #fecaca; }
+    .route-card-demand.selected { border-color: #dc2626; background: #fef2f2; }
+    .route-card-demand .route-number { background: #dc2626; }
+    .route-card-demand .check-badge { background: #dc2626; }
+
+    .route-card-balanced { border-color: #bfdbfe; }
+    .route-card-balanced.selected { border-color: #2563eb; background: #eff6ff; }
+    .route-card-balanced .route-number { background: #2563eb; }
+    .route-card-balanced .check-badge { background: #2563eb; }
+
+    .route-card-distance { border-color: #bbf7d0; }
+    .route-card-distance.selected { border-color: #059669; background: #f0fdf4; }
+    .route-card-distance .route-number { background: #059669; }
+    .route-card-distance .check-badge { background: #059669; }
+
+    /* 경로 토글 아이콘 */
+    .route-eye-btn {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      border: 1px solid #d1d5db;
+      background: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-size: 11px;
+      transition: all 0.2s;
+    }
+    .route-eye-btn:hover { background: #f3f4f6; }
+    .route-eye-btn.hidden-route { opacity: 0.4; }
+
+    /* 결과 카드 */
+    .result-stat-card {
+      background: #fafafa;
+      border-radius: 10px;
+      padding: 14px;
+      text-align: center;
+    }
+    .result-stat-value {
+      font-size: 22px;
+      font-weight: 800;
+      color: #d97706;
+    }
+    .result-stat-label {
+      font-size: 11px;
+      color: #6b7280;
+      margin-top: 4px;
+    }
+
+    /* 비교 테이블 */
+    .compare-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+    .compare-table th {
+      padding: 8px 12px;
+      text-align: center;
+      font-weight: 700;
+      background: #f9fafb;
+      border-bottom: 2px solid #e5e7eb;
+      font-size: 12px;
+    }
+    .compare-table td {
+      padding: 8px 12px;
+      text-align: center;
+      border-bottom: 1px solid #f3f4f6;
+    }
+    .compare-table tr:hover td {
+      background: #fafafa;
+    }
+    .compare-table .col-demand { background: #fef2f2; }
+    .compare-table .col-balanced { background: #eff6ff; }
+    .compare-table .col-distance { background: #f0fdf4; }
+    .compare-table .best-value {
+      font-weight: 800;
+      position: relative;
+    }
+    .compare-table .best-value::after {
+      content: '★';
+      font-size: 9px;
+      margin-left: 2px;
+      vertical-align: super;
+    }
+
+    /* 반응형 */
+    @media (max-width: 1024px) {
+      .route-left-panel {
+        width: 300px;
+        min-width: 300px;
+      }
+    }
+    @media (max-width: 768px) {
+      .route-main {
+        flex-direction: column;
+      }
+      .route-left-panel {
+        width: 100%;
+        min-width: 100%;
+        max-height: 50vh;
+        border-right: none;
+        border-bottom: 1px solid #e5e7eb;
+      }
+      .route-bottom-panel.open {
+        max-height: 300px;
+      }
+    }
+  </style>
+</head>
+<body class="route-page-body bg-gray-50">
+
+  <!-- ═══ 헤더 ═══ -->
+  <div id="app-header"></div>
+
+  <!-- ═══ 메인 3열 레이아웃 ═══ -->
+  <div class="route-main">
+
+    <!-- ─── 왼쪽 패널: 설정 ─── -->
+    <aside class="route-left-panel">
+      <!-- 패널 헤더 -->
+      <div class="px-4 py-3 border-b border-gray-100 bg-gradient-to-r from-amber-50 to-orange-50 shrink-0">
+        <h1 class="text-base font-bold text-gray-900 flex items-center gap-2">
+          <span class="w-7 h-7 bg-amber-500 rounded-lg flex items-center justify-center text-sm text-white">&#x1F4CD;</span>
+          빈차 경로 AI 최적화
+        </h1>
+        <p class="text-xs text-gray-500 mt-1">3가지 전략의 경로를 동시에 비교합니다</p>
+      </div>
+
+      <!-- 스크롤 영역 -->
+      <div class="route-left-scroll">
+
+        <!-- 섹션 1: 현재 위치 -->
+        <div class="setting-section" style="border-left: 3px solid #f59e0b;">
+          <div class="setting-section-title text-amber-700">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+            현재 위치
+          </div>
+          <select id="startLocation" class="w-full text-sm border border-gray-200 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-amber-300 focus:border-amber-400 outline-none bg-white" onchange="onStartLocationChange()">
+            <option value="">출발지를 선택하세요</option>
+            <option value="gangnam">강남역 (37.4979, 127.0276)</option>
+            <option value="seoul_station">서울역 (37.5547, 126.9707)</option>
+            <option value="hongdae">홍대입구역 (37.5571, 126.9246)</option>
+            <option value="jamsil">잠실역 (37.5133, 127.1000)</option>
+            <option value="yeouido">여의도 IFC (37.5252, 126.9256)</option>
+            <option value="gwanghwamun">광화문 (37.5759, 126.9769)</option>
+            <option value="gangnam_express">고속터미널 (37.5048, 127.0040)</option>
+            <option value="gimpo">김포공항 (37.5616, 126.8016)</option>
+            <option value="itaewon">이태원역 (37.5346, 126.9946)</option>
+            <option value="myeongdong">명동 (37.5636, 126.9850)</option>
+            <option value="sindorim">신도림역 (37.5088, 126.8912)</option>
+            <option value="guro_digital">구로디지털단지 (37.4853, 126.9016)</option>
+            <option value="map_select">&#x1F4CD; 지도에서 선택</option>
+          </select>
+          <div id="mapSelectHint" class="hidden mt-2 text-xs text-amber-600 flex items-center gap-1">
+            <svg class="w-3 h-3 animate-pulse" fill="currentColor" viewBox="0 0 20 20"><circle cx="10" cy="10" r="10"/></svg>
+            지도를 클릭하여 출발지를 지정하세요
+          </div>
+          <div id="selectedPosInfo" class="hidden mt-2 text-xs text-gray-600 bg-amber-50 rounded-lg px-3 py-2"></div>
+        </div>
+
+        <!-- 섹션 2: 운행 조건 -->
+        <div class="setting-section" style="border-left: 3px solid #ea580c;">
+          <div class="setting-section-title text-orange-700">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            운행 조건
+          </div>
+          <div class="grid grid-cols-2 gap-3 mb-3">
+            <div>
+              <label class="text-xs text-gray-500 font-medium block mb-1">시간대</label>
+              <select id="hourSelect" class="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-amber-300 outline-none bg-white">
+              </select>
+            </div>
+            <div>
+              <label class="text-xs text-gray-500 font-medium block mb-1">요일</label>
+              <select id="daySelect" class="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-amber-300 outline-none bg-white">
+                <option value="1">월요일</option>
+                <option value="2">화요일</option>
+                <option value="3">수요일</option>
+                <option value="4">목요일</option>
+                <option value="5" selected>금요일</option>
+                <option value="6">토요일</option>
+                <option value="0">일요일</option>
+              </select>
+            </div>
+          </div>
+          <div>
+            <label class="text-xs text-gray-500 font-medium block mb-1">날씨</label>
+            <select id="weatherSelect" class="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-amber-300 outline-none bg-white">
+              <option value="clear">&#x2600;&#xFE0F; 맑음</option>
+              <option value="cloudy">&#x26C5; 흐림</option>
+              <option value="rain">&#x1F327;&#xFE0F; 비</option>
+              <option value="heavy_rain">&#x26C8;&#xFE0F; 폭우</option>
+              <option value="snow">&#x2744;&#xFE0F; 눈</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- 섹션 3: 경로 설정 -->
+        <div class="setting-section" style="border-left: 3px solid #059669;">
+          <div class="setting-section-title text-green-700">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"/></svg>
+            경로 설정
+          </div>
+          <div class="mb-3">
+            <div class="flex items-center justify-between mb-2">
+              <label class="text-xs text-gray-500 font-medium">최대 경유지 수</label>
+              <span id="maxStopsLabel" class="text-sm font-bold text-amber-600">6개</span>
+            </div>
+            <input type="range" id="maxStopsSlider" min="3" max="12" value="6" oninput="onMaxStopsChange(this.value)">
+            <div class="flex justify-between text-[10px] text-gray-400 mt-1">
+              <span>3개</span>
+              <span>12개</span>
+            </div>
+          </div>
+          <!-- 경로 3개 범례 -->
+          <div class="mt-2">
+            <label class="text-xs text-gray-500 font-medium block mb-2">3가지 경로 동시 비교</label>
+            <div class="space-y-1.5">
+              <div class="flex items-center gap-2 text-xs">
+                <span class="w-4 h-4 rounded-full bg-red-600 flex items-center justify-center text-white text-[9px] font-bold">1</span>
+                <span class="font-semibold text-red-700">수요 우선</span>
+                <span class="text-gray-400">— 승객 많은 곳 중심</span>
+              </div>
+              <div class="flex items-center gap-2 text-xs">
+                <span class="w-4 h-4 rounded-full bg-blue-600 flex items-center justify-center text-white text-[9px] font-bold">2</span>
+                <span class="font-semibold text-blue-700">균형</span>
+                <span class="text-gray-400">— 수요 + 거리 최적</span>
+              </div>
+              <div class="flex items-center gap-2 text-xs">
+                <span class="w-4 h-4 rounded-full bg-green-600 flex items-center justify-center text-white text-[9px] font-bold">3</span>
+                <span class="font-semibold text-green-700">거리 우선</span>
+                <span class="text-gray-400">— 최단 거리 중심</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 섹션 4: 경유 핫스팟 -->
+        <div class="setting-section" style="border-left: 3px solid #2563eb;">
+          <div class="setting-section-title text-blue-700">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+            경유 핫스팟
+          </div>
+          <div class="flex items-center justify-between">
+            <div class="text-sm text-gray-700">
+              분석 대상: <span id="hotspotCount" class="font-bold text-amber-600">40</span>개 핫스팟
+            </div>
+            <button id="detailToggleBtn" class="text-xs text-blue-600 font-semibold hover:underline" onclick="toggleHotspotDetail()">상세 보기 &#x25BC;</button>
+          </div>
+          <div id="hotspotDetailArea" class="hidden mt-3">
+            <div id="hotspotDetailList" class="flex flex-wrap gap-1.5 max-h-[120px] overflow-y-auto pr-1"></div>
+          </div>
+        </div>
+
+        <!-- 실행 버튼 -->
+        <div class="mt-2 mb-4">
+          <button id="executeBtn" class="btn-execute" onclick="runOptimization()">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+            3개 경로 동시 최적화 실행
+          </button>
+        </div>
+
+        <!-- 로딩 표시 -->
+        <div id="leftPanelLoading" class="hidden flex items-center justify-center gap-3 py-4">
+          <div class="spinner"></div>
+          <span class="text-sm text-gray-600 font-medium" id="loadingStatusText">경로 계산 중...</span>
+        </div>
+
+        <!-- ═══ 경로 선택 카드 (최적화 후 표시) ═══ -->
+        <div id="routeSelectArea" class="hidden space-y-3">
+          <div class="text-xs font-bold text-gray-500 uppercase tracking-wide mb-1 flex items-center gap-2">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            경로를 선택하세요
+          </div>
+
+          <!-- 1번: 수요 우선 (빨강) -->
+          <div id="card-demand" class="route-select-card route-card-demand" onclick="selectRoute('demand')">
+            <div class="check-badge">&#x2713;</div>
+            <div class="flex items-center gap-3 mb-2">
+              <div class="route-number">1</div>
+              <div>
+                <div class="text-sm font-bold text-red-700">수요 우선 경로</div>
+                <div class="text-[11px] text-gray-500">승객 수요가 높은 지역 중심</div>
+              </div>
+              <button class="route-eye-btn ml-auto" onclick="event.stopPropagation(); toggleRouteVisibility('demand')" id="eye-demand" title="지도에서 숨기기/표시">&#x1F441;</button>
+            </div>
+            <div id="card-demand-stats" class="grid grid-cols-4 gap-1.5 text-[11px]"></div>
+          </div>
+
+          <!-- 2번: 균형 (파랑) -->
+          <div id="card-balanced" class="route-select-card route-card-balanced" onclick="selectRoute('balanced')">
+            <div class="check-badge">&#x2713;</div>
+            <div class="flex items-center gap-3 mb-2">
+              <div class="route-number">2</div>
+              <div>
+                <div class="text-sm font-bold text-blue-700">균형 경로</div>
+                <div class="text-[11px] text-gray-500">수요와 거리의 최적 균형</div>
+              </div>
+              <button class="route-eye-btn ml-auto" onclick="event.stopPropagation(); toggleRouteVisibility('balanced')" id="eye-balanced" title="지도에서 숨기기/표시">&#x1F441;</button>
+            </div>
+            <div id="card-balanced-stats" class="grid grid-cols-4 gap-1.5 text-[11px]"></div>
+          </div>
+
+          <!-- 3번: 거리 우선 (초록) -->
+          <div id="card-distance" class="route-select-card route-card-distance" onclick="selectRoute('distance')">
+            <div class="check-badge">&#x2713;</div>
+            <div class="flex items-center gap-3 mb-2">
+              <div class="route-number">3</div>
+              <div>
+                <div class="text-sm font-bold text-green-700">거리 우선 경로</div>
+                <div class="text-[11px] text-gray-500">최단 거리, 연료 절약 중심</div>
+              </div>
+              <button class="route-eye-btn ml-auto" onclick="event.stopPropagation(); toggleRouteVisibility('distance')" id="eye-distance" title="지도에서 숨기기/표시">&#x1F441;</button>
+            </div>
+            <div id="card-distance-stats" class="grid grid-cols-4 gap-1.5 text-[11px]"></div>
+          </div>
+
+          <button class="w-full text-xs text-center text-gray-600 font-semibold py-2 bg-gray-100 rounded-lg hover:bg-gray-200 transition mt-1" onclick="showBottomPanel()">
+            &#x25BC; 상세 비교 보기
+          </button>
+        </div>
+
+      </div>
+    </aside>
+
+    <!-- ─── 지도 영역 ─── -->
+    <div class="route-map-area">
+      <!-- 지도 상단 배지 -->
+      <div class="map-overlay-badge" style="top:12px; left:12px; display:flex; align-items:center; gap:6px;">
+        <span class="w-2 h-2 rounded-full bg-green-500 animate-pulse-dot"></span>
+        <span class="text-gray-700">서울시 실시간 수요 분석</span>
+      </div>
+
+      <!-- 범례 -->
+      <div id="routeLegendOverlay" class="map-overlay-badge" style="top:12px; right:12px; display:none;">
+        <div class="text-[10px] text-gray-500 mb-1 font-bold">경로 범례</div>
+        <div class="space-y-1">
+          <div class="flex items-center gap-2 text-[11px]">
+            <div style="width:20px;height:3px;background:#dc2626;border-radius:2px;"></div>
+            <span class="text-red-700 font-semibold">1번 수요 우선</span>
+          </div>
+          <div class="flex items-center gap-2 text-[11px]">
+            <div style="width:20px;height:3px;background:#2563eb;border-radius:2px;"></div>
+            <span class="text-blue-700 font-semibold">2번 균형</span>
+          </div>
+          <div class="flex items-center gap-2 text-[11px]">
+            <div style="width:20px;height:3px;background:#059669;border-radius:2px;"></div>
+            <span class="text-green-700 font-semibold">3번 거리 우선</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 지도 -->
+      <div id="routeMap"></div>
+
+      <!-- 하단 토글 버튼 -->
+      <div id="bottomToggleBtn" class="bottom-toggle" onclick="toggleBottomPanel()">
+        <span id="bottomToggleIcon">&#x25B2;</span> 결과 패널
+      </div>
+
+      <!-- 로딩 오버레이 (지도 위) -->
+      <div id="mapLoadingOverlay" class="loading-overlay" style="display:none;">
+        <div class="loading-spinner-lg"></div>
+        <div class="text-sm font-semibold text-gray-700" id="mapLoadingText">AI 경로 최적화 중...</div>
+        <div class="text-xs text-gray-500" id="mapLoadingSubText">3가지 전략 동시 계산</div>
+      </div>
+    </div>
+
+    <!-- ─── 하단 패널: 결과 ─── -->
+    <div id="bottomPanel" class="route-bottom-panel" style="position:absolute; bottom:0; left:360px; right:0; z-index:10;">
+      <!-- 패널 헤더 -->
+      <div class="flex items-center justify-between px-5 py-2 border-b border-gray-100 bg-gradient-to-r from-gray-50 to-gray-100 shrink-0">
+        <div class="flex items-center gap-4">
+          <h3 class="text-sm font-bold text-gray-800">3개 경로 비교 결과</h3>
+          <div class="flex" id="resultTabs">
+            <button class="tab-btn active" data-tab="compare" onclick="switchTab('compare')">비교 분석</button>
+            <button class="tab-btn" data-tab="detail" onclick="switchTab('detail')">선택 경로 상세</button>
+            <button class="tab-btn" data-tab="revenue" onclick="switchTab('revenue')">수익 예측</button>
+          </div>
+        </div>
+        <button class="text-gray-400 hover:text-gray-600 transition p-1" onclick="hideBottomPanel()" title="패널 닫기">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+        </button>
+      </div>
+      <!-- 탭 콘텐츠 -->
+      <div id="tabContent" class="px-5 py-4"></div>
+    </div>
+  </div>
+
+  <!-- ═══ 푸터 (숨김 - 풀스크린 앱) ═══ -->
+  <div id="app-footer" class="hidden"></div>
+
+  <!-- ═══ 스크립트 ═══ -->
+  <script src="js/mock-data.js"></script>
+  <script src="js/shared.js"></script>
+  <script src="js/map-engine.js"></script>
+  <script src="js/route-algorithm.js"></script>
+  <script src="js/demand-engine.js"></script>
+
+  <script>
+  /* ═══════════════════════════════════════════
+     경로 최적화 페이지 — 3개 경로 동시 비교
+     ═══════════════════════════════════════════ */
+
+  /* ── 경로별 색상 & 설정 ── */
+  var ROUTE_CONFIG = {
+    demand:   { main: '#dc2626', shadow: '#991b1b', light: '#fef2f2', label: '1번 수요 우선', labelShort: '수요 우선', number: 1 },
+    balanced: { main: '#2563eb', shadow: '#1e3a8a', light: '#eff6ff', label: '2번 균형',       labelShort: '균형',       number: 2 },
+    distance: { main: '#059669', shadow: '#064e3b', light: '#f0fdf4', label: '3번 거리 우선', labelShort: '거리 우선', number: 3 }
+  };
+  var ROUTE_KEYS = ['demand', 'balanced', 'distance'];
+
+  /* ── 전역 상태 ── */
+  var map = null;
+  var currentStartPos = null;
+  var startMarker = null;
+  var hotspotMarkers = [];
+  var isMapSelectMode = false;
+  var isOptimizing = false;
+  var isBottomPanelOpen = false;
+  var hotspotDetailVisible = false;
+
+  /* 3개 경로 결과 */
+  var routeResults = { demand: null, balanced: null, distance: null };
+  var routeSchedules = { demand: null, balanced: null, distance: null };
+  var osrmResults = { demand: null, balanced: null, distance: null };
+
+  /* 지도 레이어 그룹 */
+  var routeLayerGroups = { demand: null, balanced: null, distance: null };
+  var routeVisibility = { demand: true, balanced: true, distance: true };
+
+  /* 현재 선택된 경로 */
+  var selectedRoute = null;
+
+  /* ── 출발 위치 데이터 맵 ── */
+  var START_LOCATIONS = {
+    gangnam:         { lat: 37.4979, lng: 127.0276, name: '강남역' },
+    seoul_station:   { lat: 37.5547, lng: 126.9707, name: '서울역' },
+    hongdae:         { lat: 37.5571, lng: 126.9246, name: '홍대입구역' },
+    jamsil:          { lat: 37.5133, lng: 127.1000, name: '잠실역' },
+    yeouido:         { lat: 37.5252, lng: 126.9256, name: '여의도 IFC' },
+    gwanghwamun:     { lat: 37.5759, lng: 126.9769, name: '광화문' },
+    gangnam_express: { lat: 37.5048, lng: 127.0040, name: '고속터미널' },
+    gimpo:           { lat: 37.5616, lng: 126.8016, name: '김포공항' },
+    itaewon:         { lat: 37.5346, lng: 126.9946, name: '이태원역' },
+    myeongdong:      { lat: 37.5636, lng: 126.9850, name: '명동' },
+    sindorim:        { lat: 37.5088, lng: 126.8912, name: '신도림역' },
+    guro_digital:    { lat: 37.4853, lng: 126.9016, name: '구로디지털단지' }
+  };
+
+  /* ── 유틸 ── */
+  function sleep(ms) {
+    return new Promise(function(resolve) { setTimeout(resolve, ms); });
+  }
+
+  /* ═══ 초기화 ═══ */
+  document.addEventListener('DOMContentLoaded', function() {
+    initPage('route');
+    initHourSelect();
+    initMapInstance();
+    drawInitialHotspots();
+    updateHotspotCount();
+    renderHotspotDetailList();
+    setCurrentTimeDefaults();
+  });
+
+  function initHourSelect() {
+    var sel = document.getElementById('hourSelect');
+    for (var h = 0; h < 24; h++) {
+      var opt = document.createElement('option');
+      opt.value = h;
+      opt.textContent = formatHour(h);
+      sel.appendChild(opt);
+    }
+  }
+
+  function setCurrentTimeDefaults() {
+    var now = new Date();
+    document.getElementById('hourSelect').value = now.getHours();
+    document.getElementById('daySelect').value = now.getDay();
+  }
+
+  function initMapInstance() {
+    map = initMap('routeMap', [37.5500, 126.9900], 12);
+    map.on('click', function(e) {
+      if (!isMapSelectMode) return;
+      var lat = Math.round(e.latlng.lat * 10000) / 10000;
+      var lng = Math.round(e.latlng.lng * 10000) / 10000;
+      currentStartPos = { lat: lat, lng: lng, name: '사용자 지정 (' + lat + ', ' + lng + ')' };
+      placeStartMarker(lat, lng);
+      isMapSelectMode = false;
+      document.getElementById('mapSelectHint').classList.add('hidden');
+      document.getElementById('selectedPosInfo').classList.remove('hidden');
+      document.getElementById('selectedPosInfo').innerHTML =
+        '<span class="font-semibold text-amber-700">&#x1F4CC; 선택 위치:</span> ' + lat + ', ' + lng;
+      map.getContainer().style.cursor = '';
+    });
+  }
+
+  function placeStartMarker(lat, lng) {
+    if (startMarker) { map.removeLayer(startMarker); }
+    startMarker = addTaxiMarker(map, lat, lng);
+    map.setView([lat, lng], 13);
+  }
+
+  function drawInitialHotspots() {
+    var hour = parseInt(document.getElementById('hourSelect').value) || new Date().getHours();
+    var day = parseInt(document.getElementById('daySelect').value);
+    var weather = document.getElementById('weatherSelect').value;
+    clearHotspotMarkers();
+    HOTSPOTS.forEach(function(hs) {
+      var score = calculateDemandScore(hs, hour, day, weather);
+      var m = addHotspotMarker(map, hs, score);
+      hotspotMarkers.push(m);
+    });
+  }
+
+  function clearHotspotMarkers() {
+    hotspotMarkers.forEach(function(m) { map.removeLayer(m); });
+    hotspotMarkers = [];
+  }
+
+  /* ── 모든 경로 레이어 제거 ── */
+  function clearAllRouteLayers() {
+    ROUTE_KEYS.forEach(function(key) {
+      if (routeLayerGroups[key]) {
+        map.removeLayer(routeLayerGroups[key]);
+        routeLayerGroups[key] = null;
+      }
+    });
+  }
+
+  /* ═══ 이벤트 핸들러 ═══ */
+
+  function onStartLocationChange() {
+    var val = document.getElementById('startLocation').value;
+    document.getElementById('mapSelectHint').classList.add('hidden');
+    document.getElementById('selectedPosInfo').classList.add('hidden');
+    isMapSelectMode = false;
+    map.getContainer().style.cursor = '';
+
+    if (val === 'map_select') {
+      isMapSelectMode = true;
+      document.getElementById('mapSelectHint').classList.remove('hidden');
+      map.getContainer().style.cursor = 'crosshair';
+      currentStartPos = null;
+      if (startMarker) { map.removeLayer(startMarker); startMarker = null; }
+      return;
+    }
+
+    if (val && START_LOCATIONS[val]) {
+      var loc = START_LOCATIONS[val];
+      currentStartPos = { lat: loc.lat, lng: loc.lng, name: loc.name };
+      placeStartMarker(loc.lat, loc.lng);
+    } else {
+      currentStartPos = null;
+      if (startMarker) { map.removeLayer(startMarker); startMarker = null; }
+    }
+  }
+
+  function onMaxStopsChange(val) {
+    document.getElementById('maxStopsLabel').textContent = val + '개';
+  }
+
+  function toggleHotspotDetail() {
+    hotspotDetailVisible = !hotspotDetailVisible;
+    document.getElementById('hotspotDetailArea').classList.toggle('hidden', !hotspotDetailVisible);
+    document.getElementById('detailToggleBtn').innerHTML = hotspotDetailVisible ? '접기 &#x25B2;' : '상세 보기 &#x25BC;';
+  }
+
+  function updateHotspotCount() {
+    document.getElementById('hotspotCount').textContent = HOTSPOTS.length;
+  }
+
+  function renderHotspotDetailList() {
+    var hour = parseInt(document.getElementById('hourSelect').value) || new Date().getHours();
+    var day = parseInt(document.getElementById('daySelect').value);
+    var weather = document.getElementById('weatherSelect').value;
+    var scored = HOTSPOTS.map(function(hs) {
+      return { name: hs.name, score: calculateDemandScore(hs, hour, day, weather), type: hs.type };
+    });
+    scored.sort(function(a, b) { return b.score - a.score; });
+    var html = scored.map(function(s) {
+      var color = s.score >= 80 ? 'background:#fef2f2;color:#dc2626;border-color:#fecaca;' :
+                  s.score >= 60 ? 'background:#fffbeb;color:#d97706;border-color:#fde68a;' :
+                  'background:#f0fdf4;color:#16a34a;border-color:#bbf7d0;';
+      return '<span class="hotspot-chip" style="' + color + '">' + s.name + ' <b>' + s.score + '</b></span>';
+    }).join('');
+    document.getElementById('hotspotDetailList').innerHTML = html;
+  }
+
+  /* ═══ 우선순위별 핫스팟 조정 ═══ */
+  function getAdjustedHotspots(priority, hour, day, weather) {
+    if (priority === 'demand') {
+      var scored = HOTSPOTS.map(function(hs) {
+        return { hs: hs, score: calculateDemandScore(hs, hour, day, weather) };
+      });
+      scored.sort(function(a, b) { return b.score - a.score; });
+      return scored.slice(0, Math.min(25, scored.length)).map(function(s) { return s.hs; });
+    } else if (priority === 'distance') {
+      if (!currentStartPos) return HOTSPOTS;
+      var withDist = HOTSPOTS.map(function(hs) {
+        var d = haversineDistance(currentStartPos.lat, currentStartPos.lng, hs.lat, hs.lng);
+        return { hs: hs, dist: d };
+      });
+      withDist.sort(function(a, b) { return a.dist - b.dist; });
+      return withDist.slice(0, Math.min(20, withDist.length)).map(function(s) { return s.hs; });
+    }
+    return HOTSPOTS;
+  }
+
+  /* ── 로딩 텍스트 업데이트 ── */
+  function updateLoadingStatus(main, sub) {
+    document.getElementById('loadingStatusText').textContent = main;
+    document.getElementById('mapLoadingText').textContent = main;
+    document.getElementById('mapLoadingSubText').textContent = sub || '';
+  }
+
+  /* ═══════════════════════════════════════════
+     메인 최적화 — 3개 경로 동시 실행
+     ═══════════════════════════════════════════ */
+  async function runOptimization() {
+    if (!currentStartPos) {
+      alert('출발지를 선택해주세요.');
+      document.getElementById('startLocation').focus();
+      return;
+    }
+    if (isOptimizing) return;
+
+    isOptimizing = true;
+    var btn = document.getElementById('executeBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<div class="spinner" style="width:20px;height:20px;border-width:2px;"></div> 3개 경로 최적화 중...';
+
+    document.getElementById('leftPanelLoading').classList.remove('hidden');
+    document.getElementById('mapLoadingOverlay').style.display = 'flex';
+    document.getElementById('routeSelectArea').classList.add('hidden');
+    hideBottomPanel();
+    clearAllRouteLayers();
+    clearHotspotMarkers();
+
+    var hour = parseInt(document.getElementById('hourSelect').value);
+    var day = parseInt(document.getElementById('daySelect').value);
+    var weather = document.getElementById('weatherSelect').value;
+    var maxStops = parseInt(document.getElementById('maxStopsSlider').value);
+
+    try {
+      // 단계 1: 수요 분석
+      updateLoadingStatus('수요 점수 계산 중...', '40개 핫스팟 × 3가지 전략');
+      await sleep(500);
+
+      // 단계 2: 3개 경로 계산
+      updateLoadingStatus('1번 수요 우선 경로 탐색 중...', '수요 가중 최근접 이웃 + 2-opt');
+      await sleep(300);
+      var demandHotspots = getAdjustedHotspots('demand', hour, day, weather);
+      routeResults.demand = planEmptyCarRoute(currentStartPos, demandHotspots, hour, day, weather, maxStops);
+
+      updateLoadingStatus('2번 균형 경로 탐색 중...', '수요 + 거리 종합 최적화');
+      await sleep(300);
+      var balancedHotspots = getAdjustedHotspots('balanced', hour, day, weather);
+      routeResults.balanced = planEmptyCarRoute(currentStartPos, balancedHotspots, hour, day, weather, maxStops);
+
+      updateLoadingStatus('3번 거리 우선 경로 탐색 중...', '최단 거리 기반 최적화');
+      await sleep(300);
+      var distanceHotspots = getAdjustedHotspots('distance', hour, day, weather);
+      routeResults.distance = planEmptyCarRoute(currentStartPos, distanceHotspots, hour, day, weather, maxStops);
+
+      // 단계 3: OSRM 도로 매칭 (3개 모두)
+      updateLoadingStatus('도로 경로 매칭 중...', 'OSRM 서버 조회 (3개 경로)');
+      await sleep(200);
+
+      var osrmPromises = ROUTE_KEYS.map(function(key) {
+        var wp = routeResults[key].route.map(function(r) { return { lat: r.lat, lng: r.lng }; });
+        return getOSRMRoute(wp).then(function(result) {
+          osrmResults[key] = result;
+          if (result && result.distance > 0) {
+            routeResults[key].totalDistance = result.distance;
+            routeResults[key].estimatedTime = result.duration;
+            routeResults[key].fuelCost = Math.round(result.distance * 160);
+          }
+        });
+      });
+      await Promise.all(osrmPromises);
+
+      // 단계 4: 일정 계산
+      updateLoadingStatus('경로 일정 생성 중...', '3개 경로 도착 시간 계산');
+      await sleep(200);
+
+      var startTimeStr = formatHour(hour);
+      ROUTE_KEYS.forEach(function(key) {
+        routeSchedules[key] = estimateRouteSchedule(routeResults[key], startTimeStr);
+      });
+
+      // 단계 5: 지도에 그리기
+      updateLoadingStatus('지도에 3개 경로 표시 중...', '');
+      await sleep(200);
+
+      drawAllRoutes();
+      renderRouteSelectCards();
+      showRouteLegend();
+
+      // 기본 선택: 수요 우선
+      selectedRoute = 'demand';
+      highlightSelectedCard();
+
+      // 하단 패널
+      switchTab('compare');
+      showBottomPanel();
+
+    } catch (err) {
+      console.error('최적화 오류:', err);
+      alert('경로 최적화 중 오류가 발생했습니다: ' + err.message);
+    } finally {
+      isOptimizing = false;
+      btn.disabled = false;
+      btn.innerHTML = '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg> 3개 경로 동시 최적화 실행';
+      document.getElementById('leftPanelLoading').classList.add('hidden');
+      document.getElementById('mapLoadingOverlay').style.display = 'none';
+    }
+  }
+
+  /* ═══════════════════════════════════════════
+     지도에 3개 경로 동시 그리기
+     ═══════════════════════════════════════════ */
+  function drawAllRoutes() {
+    clearAllRouteLayers();
+
+    // 출발지 마커
+    if (startMarker) map.removeLayer(startMarker);
+    startMarker = addTaxiMarker(map, currentStartPos.lat, currentStartPos.lng);
+
+    var allBounds = [];
+
+    // 경로를 역순으로 그려서 1번(빨강)이 가장 위에 오도록
+    var drawOrder = ['distance', 'balanced', 'demand'];
+
+    drawOrder.forEach(function(key) {
+      var result = routeResults[key];
+      var osrm = osrmResults[key];
+      var config = ROUTE_CONFIG[key];
+      if (!result || !result.route || result.route.length === 0) return;
+
+      var layerGroup = L.layerGroup();
+
+      // 경로 지오메트리
+      var routeGeometry = (osrm && osrm.geometry && osrm.geometry.length > 2)
+        ? osrm.geometry
+        : result.route.map(function(r) { return [r.lat, r.lng]; });
+
+      // 그림자선
+      var shadow = L.polyline(routeGeometry, {
+        color: config.shadow, weight: 9, opacity: 0.2,
+        lineJoin: 'round', lineCap: 'round'
+      });
+      layerGroup.addLayer(shadow);
+
+      // 메인 경로선
+      var mainLine = L.polyline(routeGeometry, {
+        color: config.main, weight: 5, opacity: 0.85,
+        lineJoin: 'round', lineCap: 'round'
+      });
+      layerGroup.addLayer(mainLine);
+
+      // 방향 점선 오버레이
+      var dashLine = L.polyline(routeGeometry, {
+        color: '#ffffff', weight: 2, opacity: 0.5,
+        dashArray: '8, 14', lineJoin: 'round', lineCap: 'round'
+      });
+      layerGroup.addLayer(dashLine);
+
+      // 경유 마커 (번호)
+      var route = result.route;
+      for (var i = 1; i < route.length; i++) {
+        var spot = route[i];
+        var markerColor = key === 'demand' ? 'red' : key === 'balanced' ? 'blue' : 'green';
+        var popupHtml = buildStopPopup(spot, i, key);
+        var marker = createColoredNumberMarker(spot.lat, spot.lng, config.number + '-' + i, config.main, popupHtml);
+        layerGroup.addLayer(marker);
+        allBounds.push([spot.lat, spot.lng]);
+      }
+
+      allBounds.push([route[0].lat, route[0].lng]);
+
+      layerGroup.addTo(map);
+      routeLayerGroups[key] = layerGroup;
+    });
+
+    // 지도 범위 맞추기
+    if (allBounds.length > 0) {
+      fitMapBounds(map, allBounds);
+    }
+  }
+
+  /* ── 색상 지정 번호 마커 생성 ── */
+  function createColoredNumberMarker(lat, lng, label, bgColor, popupContent) {
+    var icon = L.divIcon({
+      className: 'custom-div-icon',
+      html: '<div style="background:' + bgColor + ';color:white;border-radius:50%;width:30px;height:30px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:11px;border:3px solid white;box-shadow:0 2px 8px rgba(0,0,0,0.3);font-family:Pretendard Variable,sans-serif;">' + label + '</div>',
+      iconSize: [30, 30], iconAnchor: [15, 15], popupAnchor: [0, -17]
+    });
+    var marker = L.marker([lat, lng], { icon: icon });
+    if (popupContent) marker.bindPopup(popupContent, { maxWidth: 300, className: 'custom-popup' });
+    return marker;
+  }
+
+  /* ── 정류장 팝업 ── */
+  function buildStopPopup(spot, index, routeKey) {
+    var config = ROUTE_CONFIG[routeKey];
+    var grade = getDemandGrade(spot.score);
+    var schedule = routeSchedules[routeKey];
+    var scheduleItem = schedule ? schedule[index] : null;
+    var arrTime = scheduleItem ? scheduleItem.arrivalTime : '--:--';
+
+    return '<div style="min-width:220px;">' +
+      '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">' +
+        '<span style="background:' + config.main + ';color:white;border-radius:50%;width:24px;height:24px;display:inline-flex;align-items:center;justify-content:center;font-weight:700;font-size:11px;">' + config.number + '-' + index + '</span>' +
+        '<span style="font-weight:700;font-size:14px;">' + spot.name + '</span>' +
+        '<span style="background:' + config.main + '20;color:' + config.main + ';padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;">' + config.labelShort + '</span>' +
+      '</div>' +
+      '<div style="font-size:12px;color:#6b7280;margin-bottom:6px;">' + (spot.district || '') + ' / ' + (spot.hotspotType || '') + '</div>' +
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;font-size:12px;">' +
+        '<div>수요 점수: <b class="' + getScoreColor(spot.score) + '">' + spot.score + '</b> <span style="font-size:10px;">' + grade.label + '</span></div>' +
+        '<div>평균 요금: <b>' + fmt(spot.avgFare || 0) + '원</b></div>' +
+        '<div>도착 예정: <b>' + arrTime + '</b></div>' +
+        '<div>평균 대기: <b>' + (spot.avgWait || '-') + '분</b></div>' +
+      '</div>' +
+    '</div>';
+  }
+
+  /* ═══ 경로 선택 카드 렌더링 ═══ */
+  function renderRouteSelectCards() {
+    ROUTE_KEYS.forEach(function(key) {
+      var r = routeResults[key];
+      if (!r) return;
+      var stops = r.route.filter(function(s) { return s.type === 'hotspot'; });
+      var config = ROUTE_CONFIG[key];
+
+      var statsHtml =
+        '<div class="bg-white rounded-md p-1.5 text-center" style="border:1px solid ' + config.main + '20;">' +
+          '<div class="font-bold" style="color:' + config.main + ';font-size:13px;">' + r.totalDistance.toFixed(1) + '<span class="text-[9px] font-normal text-gray-500">km</span></div>' +
+          '<div class="text-gray-400 text-[9px]">거리</div>' +
+        '</div>' +
+        '<div class="bg-white rounded-md p-1.5 text-center" style="border:1px solid ' + config.main + '20;">' +
+          '<div class="font-bold" style="color:' + config.main + ';font-size:13px;">' + r.estimatedTime + '<span class="text-[9px] font-normal text-gray-500">분</span></div>' +
+          '<div class="text-gray-400 text-[9px]">시간</div>' +
+        '</div>' +
+        '<div class="bg-white rounded-md p-1.5 text-center" style="border:1px solid ' + config.main + '20;">' +
+          '<div class="font-bold" style="color:' + config.main + ';font-size:13px;">' + r.avgDemandScore + '<span class="text-[9px] font-normal text-gray-500">점</span></div>' +
+          '<div class="text-gray-400 text-[9px]">수요</div>' +
+        '</div>' +
+        '<div class="bg-white rounded-md p-1.5 text-center" style="border:1px solid ' + config.main + '20;">' +
+          '<div class="font-bold" style="color:' + config.main + ';font-size:13px;">' + stops.length + '<span class="text-[9px] font-normal text-gray-500">곳</span></div>' +
+          '<div class="text-gray-400 text-[9px]">경유지</div>' +
+        '</div>';
+
+      document.getElementById('card-' + key + '-stats').innerHTML = statsHtml;
+    });
+
+    document.getElementById('routeSelectArea').classList.remove('hidden');
+    routeVisibility = { demand: true, balanced: true, distance: true };
+    ROUTE_KEYS.forEach(function(key) {
+      document.getElementById('eye-' + key).classList.remove('hidden-route');
+    });
+  }
+
+  /* ═══ 경로 선택 ═══ */
+  function selectRoute(key) {
+    selectedRoute = key;
+    highlightSelectedCard();
+
+    // 선택된 경로의 범위로 지도 이동
+    var result = routeResults[key];
+    if (result && result.route) {
+      var bounds = result.route.map(function(r) { return [r.lat, r.lng]; });
+      fitMapBounds(map, bounds);
+    }
+
+    // 하단 패널 갱신
+    var activeTab = document.querySelector('#resultTabs .tab-btn.active');
+    if (activeTab) switchTab(activeTab.getAttribute('data-tab'));
+  }
+
+  function highlightSelectedCard() {
+    ROUTE_KEYS.forEach(function(key) {
+      var card = document.getElementById('card-' + key);
+      card.classList.toggle('selected', key === selectedRoute);
+    });
+  }
+
+  /* ═══ 경로 표시/숨김 토글 ═══ */
+  function toggleRouteVisibility(key) {
+    routeVisibility[key] = !routeVisibility[key];
+    var layerGroup = routeLayerGroups[key];
+    var eyeBtn = document.getElementById('eye-' + key);
+
+    if (routeVisibility[key]) {
+      if (layerGroup) layerGroup.addTo(map);
+      eyeBtn.classList.remove('hidden-route');
+      eyeBtn.innerHTML = '&#x1F441;';
+    } else {
+      if (layerGroup) map.removeLayer(layerGroup);
+      eyeBtn.classList.add('hidden-route');
+      eyeBtn.innerHTML = '&#x1F441;&#x200D;&#x1F5E8;';
+    }
+  }
+
+  /* ── 경로 범례 표시 ── */
+  function showRouteLegend() {
+    document.getElementById('routeLegendOverlay').style.display = 'block';
+  }
+
+  /* ═══════════════════════════════════════════
+     하단 패널 — 탭 렌더링
+     ═══════════════════════════════════════════ */
+
+  function switchTab(tabName) {
+    document.querySelectorAll('#resultTabs .tab-btn').forEach(function(btn) {
+      btn.classList.toggle('active', btn.getAttribute('data-tab') === tabName);
+    });
+    var container = document.getElementById('tabContent');
+    if (tabName === 'compare') {
+      container.innerHTML = renderCompareTab();
+    } else if (tabName === 'detail') {
+      container.innerHTML = renderDetailTab();
+    } else if (tabName === 'revenue') {
+      container.innerHTML = renderRevenueTab();
+    }
+  }
+
+  /* ── 비교 분석 탭 ── */
+  function renderCompareTab() {
+    if (!routeResults.demand) return '<p class="text-gray-500 text-sm">경로 최적화를 먼저 실행해주세요.</p>';
+
+    var metrics = [
+      { label: '총 운행 거리', unit: 'km', key: 'totalDistance', better: 'min', decimals: 1 },
+      { label: '예상 소요 시간', unit: '분', key: 'estimatedTime', better: 'min', decimals: 0 },
+      { label: '예상 연료비', unit: '원', key: 'fuelCost', better: 'min', decimals: 0, format: true },
+      { label: '평균 수요 점수', unit: '점', key: 'avgDemandScore', better: 'max', decimals: 0 },
+      { label: '예상 탑승 건수', unit: '건', key: 'expectedPickups', better: 'max', decimals: 0 },
+      { label: '경유 핫스팟 수', unit: '곳', key: 'stopCount', better: 'max', decimals: 0 }
+    ];
+
+    // 값 추출 + 경유지 수 계산
+    ROUTE_KEYS.forEach(function(key) {
+      routeResults[key].stopCount = routeResults[key].route.filter(function(s) { return s.type === 'hotspot'; }).length;
+    });
+
+    var rows = '';
+    metrics.forEach(function(m) {
+      var values = {};
+      ROUTE_KEYS.forEach(function(key) {
+        values[key] = routeResults[key][m.key];
+      });
+
+      // 최적값 판별
+      var bestKey = null;
+      var bestVal = m.better === 'max' ? -Infinity : Infinity;
+      ROUTE_KEYS.forEach(function(key) {
+        var v = values[key];
+        if (m.better === 'max' && v > bestVal) { bestVal = v; bestKey = key; }
+        if (m.better === 'min' && v < bestVal) { bestVal = v; bestKey = key; }
+      });
+
+      rows += '<tr>';
+      rows += '<td class="text-left font-semibold text-gray-700 px-3">' + m.label + '</td>';
+      ROUTE_KEYS.forEach(function(key) {
+        var v = values[key];
+        var display = m.format ? fmt(Math.round(v)) : (m.decimals > 0 ? v.toFixed(m.decimals) : Math.round(v));
+        var isBest = (key === bestKey);
+        var colClass = 'col-' + key;
+        rows += '<td class="' + colClass + (isBest ? ' best-value' : '') + '">' +
+          '<span style="color:' + (isBest ? ROUTE_CONFIG[key].main : '#374151') + ';">' + display + '</span>' +
+          '<span class="text-gray-400 text-[10px] ml-0.5">' + m.unit + '</span>' +
+        '</td>';
+      });
+      rows += '</tr>';
+    });
+
+    // 종합 추천
+    var recommendation = getBestRouteRecommendation();
+
+    return '<div class="animate-fade-in">' +
+      '<table class="compare-table">' +
+        '<thead><tr>' +
+          '<th class="text-left" style="width:160px;">비교 항목</th>' +
+          '<th class="col-demand" style="width:140px;"><span style="color:#dc2626;">&#x1F534; 1번 수요 우선</span></th>' +
+          '<th class="col-balanced" style="width:140px;"><span style="color:#2563eb;">&#x1F535; 2번 균형</span></th>' +
+          '<th class="col-distance" style="width:140px;"><span style="color:#059669;">&#x1F7E2; 3번 거리 우선</span></th>' +
+        '</tr></thead>' +
+        '<tbody>' + rows + '</tbody>' +
+      '</table>' +
+      '<div class="mt-4 p-3 rounded-xl border-2 border-dashed" style="border-color:' + ROUTE_CONFIG[recommendation.key].main + '; background:' + ROUTE_CONFIG[recommendation.key].light + ';">' +
+        '<div class="flex items-center gap-3">' +
+          '<div class="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold" style="background:' + ROUTE_CONFIG[recommendation.key].main + ';">' + ROUTE_CONFIG[recommendation.key].number + '</div>' +
+          '<div>' +
+            '<div class="text-sm font-bold" style="color:' + ROUTE_CONFIG[recommendation.key].main + ';">AI 추천: ' + ROUTE_CONFIG[recommendation.key].label + '</div>' +
+            '<div class="text-xs text-gray-600">' + recommendation.reason + '</div>' +
+          '</div>' +
+          '<button class="ml-auto px-4 py-2 rounded-lg text-white text-xs font-bold transition hover:opacity-90" style="background:' + ROUTE_CONFIG[recommendation.key].main + ';" onclick="selectRoute(\'' + recommendation.key + '\')">이 경로 선택</button>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+  }
+
+  /* ── AI 추천 로직 ── */
+  function getBestRouteRecommendation() {
+    var scores = {};
+    ROUTE_KEYS.forEach(function(key) {
+      var r = routeResults[key];
+      // 종합 점수: 수요 50% + 탑승건수 30% - 거리비용 20%
+      var demandNorm = r.avgDemandScore / 100;
+      var pickupNorm = r.expectedPickups / 10;
+      var distPenalty = r.totalDistance / 50;
+      scores[key] = demandNorm * 0.5 + pickupNorm * 0.3 - distPenalty * 0.2;
+    });
+
+    var bestKey = 'demand';
+    var bestScore = -Infinity;
+    ROUTE_KEYS.forEach(function(key) {
+      if (scores[key] > bestScore) {
+        bestScore = scores[key];
+        bestKey = key;
+      }
+    });
+
+    var reasons = {
+      demand: '수요 점수가 가장 높아 승객 탑승 확률이 가장 높습니다.',
+      balanced: '수요와 거리를 종합적으로 고려한 가장 효율적인 경로입니다.',
+      distance: '최단 거리로 연료비를 절약하면서 효율적으로 운행할 수 있습니다.'
+    };
+
+    return { key: bestKey, reason: reasons[bestKey] };
+  }
+
+  /* ── 선택 경로 상세 탭 ── */
+  function renderDetailTab() {
+    if (!selectedRoute || !routeResults[selectedRoute]) {
+      return '<p class="text-gray-500 text-sm">왼쪽 패널에서 경로를 선택해주세요.</p>';
+    }
+
+    var key = selectedRoute;
+    var result = routeResults[key];
+    var schedule = routeSchedules[key];
+    var config = ROUTE_CONFIG[key];
+
+    if (!schedule) return '<p class="text-gray-500 text-sm">데이터가 없습니다.</p>';
+
+    var headerHtml = '<div class="flex items-center gap-3 mb-3">' +
+      '<div class="w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-sm" style="background:' + config.main + ';">' + config.number + '</div>' +
+      '<div>' +
+        '<div class="text-sm font-bold" style="color:' + config.main + ';">' + config.label + ' 경로 상세</div>' +
+        '<div class="text-xs text-gray-500">총 ' + result.totalDistance.toFixed(1) + 'km, 예상 ' + result.estimatedTime + '분</div>' +
+      '</div>' +
+    '</div>';
+
+    var rows = '';
+    for (var i = 0; i < schedule.length; i++) {
+      var sc = schedule[i];
+      var spot = sc.spot;
+      var isStart = spot.type === 'start';
+      var grade = isStart ? { grade: '-', label: '-', color: '' } : getDemandGrade(spot.score);
+      var typeIcon = getTypeIcon(spot.hotspotType || '');
+
+      var scoreBadge = isStart ? '<span class="text-gray-400">-</span>' :
+        '<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold ' + grade.color + '">' + spot.score + ' (' + grade.grade + ')</span>';
+
+      rows += '<tr class="hover:bg-gray-50/50 transition">' +
+        '<td class="px-3 py-2.5 text-center">' +
+          (isStart ? '<span class="inline-flex items-center justify-center w-6 h-6 rounded-full text-white text-xs font-bold" style="background:' + config.main + ';">S</span>' :
+          '<span class="inline-flex items-center justify-center w-6 h-6 rounded-full text-white text-xs font-bold" style="background:' + config.main + ';">' + i + '</span>') +
+        '</td>' +
+        '<td class="px-3 py-2.5"><div class="font-semibold text-sm text-gray-800">' + spot.name + '</div>' +
+          (!isStart ? '<div class="text-[11px] text-gray-400">' + (spot.district || '') + '</div>' : '') +
+        '</td>' +
+        '<td class="px-3 py-2.5 text-center"><span class="text-xs">' + typeIcon + ' ' + (isStart ? '출발' : (spot.hotspotType || '-')) + '</span></td>' +
+        '<td class="px-3 py-2.5 text-center font-mono text-sm font-semibold text-gray-700">' + sc.arrivalTime + '</td>' +
+        '<td class="px-3 py-2.5 text-center">' + scoreBadge + '</td>' +
+        '<td class="px-3 py-2.5 text-center text-sm text-gray-700">' + (isStart ? '-' : fmt(spot.avgFare || 0) + '원') + '</td>' +
+        '<td class="px-3 py-2.5 text-center text-sm text-gray-700">' + (sc.distanceToNext > 0 ? sc.distanceToNext.toFixed(1) + 'km' : '-') + '</td>' +
+        '<td class="px-3 py-2.5 text-center text-sm text-gray-700">' + (sc.travelTimeToNext > 0 ? sc.travelTimeToNext + '분' : '-') + '</td>' +
+      '</tr>';
+    }
+
+    return '<div class="animate-fade-in">' +
+      headerHtml +
+      '<div class="overflow-x-auto" style="max-height:280px;">' +
+        '<table class="w-full text-sm" style="border-collapse:collapse;">' +
+          '<thead class="sticky top-0">' +
+            '<tr class="bg-gray-50 border-b-2 border-gray-200 text-xs text-gray-500 font-semibold">' +
+              '<th class="px-3 py-2 text-center w-12">#</th>' +
+              '<th class="px-3 py-2 text-left">정류장</th>' +
+              '<th class="px-3 py-2 text-center">유형</th>' +
+              '<th class="px-3 py-2 text-center">도착 시각</th>' +
+              '<th class="px-3 py-2 text-center">수요 점수</th>' +
+              '<th class="px-3 py-2 text-center">평균 요금</th>' +
+              '<th class="px-3 py-2 text-center">다음 거리</th>' +
+              '<th class="px-3 py-2 text-center">이동 시간</th>' +
+            '</tr>' +
+          '</thead>' +
+          '<tbody>' + rows + '</tbody>' +
+        '</table>' +
+      '</div>' +
+    '</div>';
+  }
+
+  function getTypeIcon(type) {
+    var icons = {
+      '교통': '&#x1F689;', '업무': '&#x1F3E2;', '상업': '&#x1F6CD;&#xFE0F;',
+      '유흥': '&#x1F37B;', '관광': '&#x1F3D6;&#xFE0F;', '시장': '&#x1F34E;',
+      '주거': '&#x1F3E0;', '문화': '&#x1F3AD;'
+    };
+    return icons[type] || '&#x1F4CD;';
+  }
+
+  /* ── 수익 예측 탭 ── */
+  function renderRevenueTab() {
+    if (!routeResults.demand) return '<p class="text-gray-500 text-sm">데이터가 없습니다.</p>';
+
+    var revenueData = {};
+    ROUTE_KEYS.forEach(function(key) {
+      var r = routeResults[key];
+      var stops = r.route.filter(function(s) { return s.type === 'hotspot'; });
+      var avgFare = stops.length > 0
+        ? Math.round(stops.reduce(function(sum, s) { return sum + (s.avgFare || 8000); }, 0) / stops.length)
+        : 8000;
+      var revenue = r.expectedPickups * avgFare;
+      var net = revenue - r.fuelCost;
+      var hoursOnRoute = r.estimatedTime / 60;
+
+      revenueData[key] = {
+        pickups: r.expectedPickups,
+        avgFare: avgFare,
+        revenue: revenue,
+        fuelCost: r.fuelCost,
+        netIncome: net,
+        perHour: hoursOnRoute > 0 ? Math.round(revenue / hoursOnRoute) : 0,
+        perKm: r.totalDistance > 0 ? Math.round(revenue / r.totalDistance) : 0
+      };
+    });
+
+    // 최고 수익 경로
+    var bestNetKey = 'demand';
+    ROUTE_KEYS.forEach(function(key) {
+      if (revenueData[key].netIncome > revenueData[bestNetKey].netIncome) bestNetKey = key;
+    });
+
+    // 수익 비교 바 차트
+    var maxRevenue = Math.max.apply(null, ROUTE_KEYS.map(function(k) { return revenueData[k].revenue; }));
+
+    var barsHtml = ROUTE_KEYS.map(function(key) {
+      var d = revenueData[key];
+      var config = ROUTE_CONFIG[key];
+      var pct = maxRevenue > 0 ? Math.round((d.revenue / maxRevenue) * 100) : 0;
+      var isBest = (key === bestNetKey);
+
+      return '<div class="flex items-center gap-3 mb-3">' +
+        '<div class="w-24 flex items-center gap-2 shrink-0">' +
+          '<div class="w-5 h-5 rounded-full text-white flex items-center justify-center text-[10px] font-bold" style="background:' + config.main + ';">' + config.number + '</div>' +
+          '<span class="text-xs font-semibold" style="color:' + config.main + ';">' + config.labelShort + '</span>' +
+        '</div>' +
+        '<div class="flex-1">' +
+          '<div class="h-6 rounded-full overflow-hidden bg-gray-100 relative">' +
+            '<div class="h-full rounded-full transition-all" style="width:' + pct + '%; background:' + config.main + '; opacity:0.85;"></div>' +
+            '<span class="absolute inset-0 flex items-center justify-center text-xs font-bold" style="color:' + (pct > 50 ? 'white' : '#374151') + ';">' + fmt(d.revenue) + '원</span>' +
+          '</div>' +
+        '</div>' +
+        '<div class="w-24 text-right shrink-0">' +
+          '<div class="text-xs font-bold" style="color:' + (d.netIncome > 0 ? config.main : '#ef4444') + ';">순 ' + fmt(d.netIncome) + '원</div>' +
+          (isBest ? '<div class="text-[9px] text-amber-600 font-bold">BEST</div>' : '') +
+        '</div>' +
+      '</div>';
+    }).join('');
+
+    // 상세 테이블
+    var tableRows = [
+      { label: '예상 탑승', unit: '건', key: 'pickups', better: 'max' },
+      { label: '평균 요금', unit: '원', key: 'avgFare', better: 'max', format: true },
+      { label: '예상 수입', unit: '원', key: 'revenue', better: 'max', format: true },
+      { label: '연료비', unit: '원', key: 'fuelCost', better: 'min', format: true },
+      { label: '순수익', unit: '원', key: 'netIncome', better: 'max', format: true },
+      { label: '시간당 수익', unit: '원', key: 'perHour', better: 'max', format: true },
+      { label: 'km당 수익', unit: '원', key: 'perKm', better: 'max', format: true }
+    ];
+
+    var tRows = '';
+    tableRows.forEach(function(m) {
+      var bestVal = m.better === 'max' ? -Infinity : Infinity;
+      var bestK = null;
+      ROUTE_KEYS.forEach(function(key) {
+        var v = revenueData[key][m.key];
+        if (m.better === 'max' && v > bestVal) { bestVal = v; bestK = key; }
+        if (m.better === 'min' && v < bestVal) { bestVal = v; bestK = key; }
+      });
+
+      tRows += '<tr>';
+      tRows += '<td class="text-left font-semibold text-gray-700 px-3 py-2 text-xs">' + m.label + '</td>';
+      ROUTE_KEYS.forEach(function(key) {
+        var v = revenueData[key][m.key];
+        var display = m.format ? fmt(Math.round(v)) : v;
+        var isBest = (key === bestK);
+        tRows += '<td class="text-center px-3 py-2 text-xs col-' + key + (isBest ? ' best-value' : '') + '">' +
+          '<span style="color:' + (isBest ? ROUTE_CONFIG[key].main : '#374151') + ';">' + display + '</span>' +
+          '<span class="text-gray-400 text-[10px] ml-0.5">' + m.unit + '</span>' +
+        '</td>';
+      });
+      tRows += '</tr>';
+    });
+
+    return '<div class="animate-fade-in">' +
+      '<div class="grid grid-cols-2 gap-4">' +
+        '<div>' +
+          '<h4 class="text-xs font-bold text-gray-600 mb-3">&#x1F4B0; 경로별 예상 수익 비교</h4>' +
+          barsHtml +
+        '</div>' +
+        '<div>' +
+          '<h4 class="text-xs font-bold text-gray-600 mb-3">&#x1F4CA; 상세 수익 비교표</h4>' +
+          '<div class="overflow-x-auto">' +
+            '<table class="compare-table text-xs">' +
+              '<thead><tr>' +
+                '<th class="text-left" style="width:100px;">항목</th>' +
+                '<th class="col-demand" style="color:#dc2626;">&#x1F534; 수요</th>' +
+                '<th class="col-balanced" style="color:#2563eb;">&#x1F535; 균형</th>' +
+                '<th class="col-distance" style="color:#059669;">&#x1F7E2; 거리</th>' +
+              '</tr></thead>' +
+              '<tbody>' + tRows + '</tbody>' +
+            '</table>' +
+          '</div>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+  }
+
+  /* ═══ 하단 패널 제어 ═══ */
+  function showBottomPanel() {
+    var panel = document.getElementById('bottomPanel');
+    panel.classList.add('open');
+    isBottomPanelOpen = true;
+    var toggle = document.getElementById('bottomToggleBtn');
+    toggle.classList.add('visible');
+    document.getElementById('bottomToggleIcon').innerHTML = '&#x25BC;';
+  }
+
+  function hideBottomPanel() {
+    var panel = document.getElementById('bottomPanel');
+    panel.classList.remove('open');
+    isBottomPanelOpen = false;
+    document.getElementById('bottomToggleIcon').innerHTML = '&#x25B2;';
+  }
+
+  function toggleBottomPanel() {
+    if (isBottomPanelOpen) hideBottomPanel();
+    else showBottomPanel();
+  }
+
+  /* ═══ 조건 변경 시 핫스팟 재표시 ═══ */
+  document.getElementById('hourSelect').addEventListener('change', function() {
+    drawInitialHotspots();
+    renderHotspotDetailList();
+  });
+  document.getElementById('daySelect').addEventListener('change', function() {
+    drawInitialHotspots();
+    renderHotspotDetailList();
+  });
+  document.getElementById('weatherSelect').addEventListener('change', function() {
+    drawInitialHotspots();
+    renderHotspotDetailList();
+  });
+
+  </script>
+</body>
+</html>

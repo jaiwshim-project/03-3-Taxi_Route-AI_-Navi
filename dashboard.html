@@ -1,0 +1,1169 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>대시보드 - 택시내비AI</title>
+
+  <!-- Pretendard Font -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Leaflet CSS/JS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <!-- Leaflet.heat -->
+  <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
+
+  <!-- Custom CSS -->
+  <link rel="stylesheet" href="css/custom.css">
+
+  <style>
+    /* ── Dashboard-specific styles ── */
+    html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; }
+
+    #dashboard-wrap {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    #dashboard-body {
+      display: flex;
+      flex: 1;
+      min-height: 0;
+      position: relative;
+    }
+
+    /* Left panel */
+    #left-panel {
+      width: 360px;
+      min-width: 360px;
+      background: #ffffff;
+      border-right: 1px solid #e5e7eb;
+      display: flex;
+      flex-direction: column;
+      z-index: 20;
+      overflow-y: auto;
+      overflow-x: hidden;
+    }
+    #left-panel::-webkit-scrollbar { width: 5px; }
+    #left-panel::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+
+    /* Map area */
+    #map-area {
+      flex: 1;
+      position: relative;
+      min-width: 0;
+    }
+    #map {
+      width: 100%;
+      height: 100%;
+    }
+
+    /* Bottom result panel */
+    #bottom-panel {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      z-index: 25;
+      background: white;
+      border-top: 2px solid #f59e0b;
+      border-radius: 16px 16px 0 0;
+      box-shadow: 0 -4px 24px rgba(0,0,0,0.12);
+      transform: translateY(100%);
+      transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+      max-height: 340px;
+      overflow: hidden;
+    }
+    #bottom-panel.visible {
+      transform: translateY(0);
+    }
+
+    /* Status indicator */
+    .status-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+    .status-dot.active { background: #22c55e; animation: pulse-dot 2s infinite; }
+    .status-dot.idle { background: #94a3b8; }
+
+    /* Section title inside left panel */
+    .section-title {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #9ca3af;
+      margin-bottom: 8px;
+    }
+
+    /* Custom select styling */
+    .field-select {
+      width: 100%;
+      padding: 8px 12px;
+      border: 1px solid #d1d5db;
+      border-radius: 8px;
+      font-size: 13px;
+      background: white;
+      color: #374151;
+      outline: none;
+      transition: border-color 0.2s;
+      font-family: 'Pretendard Variable', sans-serif;
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%236b7280' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 12px center;
+    }
+    .field-select:focus { border-color: #f59e0b; box-shadow: 0 0 0 3px rgba(245,158,11,0.1); }
+
+    .field-input {
+      width: 100%;
+      padding: 8px 12px;
+      border: 1px solid #d1d5db;
+      border-radius: 8px;
+      font-size: 13px;
+      background: white;
+      color: #374151;
+      outline: none;
+      transition: border-color 0.2s;
+      font-family: 'Pretendard Variable', sans-serif;
+    }
+    .field-input:focus { border-color: #f59e0b; box-shadow: 0 0 0 3px rgba(245,158,11,0.1); }
+
+    /* Weather buttons */
+    .weather-btn {
+      padding: 6px 10px;
+      border: 1px solid #d1d5db;
+      border-radius: 8px;
+      font-size: 12px;
+      cursor: pointer;
+      transition: all 0.2s;
+      background: white;
+      color: #374151;
+      font-family: 'Pretendard Variable', sans-serif;
+    }
+    .weather-btn:hover { border-color: #f59e0b; background: #fffbeb; }
+    .weather-btn.selected { border-color: #f59e0b; background: #fef3c7; color: #92400e; font-weight: 600; }
+
+    /* AI analyze button */
+    .btn-analyze {
+      width: 100%;
+      padding: 12px;
+      background: linear-gradient(135deg, #f59e0b, #d97706);
+      color: white;
+      border: none;
+      border-radius: 10px;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s;
+      font-family: 'Pretendard Variable', sans-serif;
+      box-shadow: 0 2px 8px rgba(245,158,11,0.3);
+    }
+    .btn-analyze:hover { background: linear-gradient(135deg, #d97706, #b45309); transform: translateY(-1px); box-shadow: 0 4px 16px rgba(245,158,11,0.4); }
+    .btn-analyze:active { transform: translateY(0); }
+    .btn-analyze:disabled {
+      background: #d1d5db;
+      cursor: not-allowed;
+      box-shadow: none;
+      transform: none;
+    }
+
+    /* Hotspot result card */
+    .hotspot-result-card {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 14px;
+      border-radius: 10px;
+      border: 1px solid #f3f4f6;
+      transition: all 0.2s;
+      cursor: pointer;
+    }
+    .hotspot-result-card:hover { background: #fffbeb; border-color: #fde68a; }
+
+    .rank-badge {
+      width: 28px; height: 28px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 13px;
+      color: white;
+      flex-shrink: 0;
+    }
+
+    /* Bottom panel handle */
+    .bottom-handle {
+      width: 40px;
+      height: 4px;
+      border-radius: 2px;
+      background: #d1d5db;
+      margin: 8px auto 4px;
+    }
+
+    /* Map overlay status bar */
+    .map-status-bar {
+      position: absolute;
+      top: 12px;
+      left: 12px;
+      z-index: 15;
+      background: white;
+      border-radius: 10px;
+      padding: 8px 14px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.1);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+    }
+
+    /* Map legend */
+    .map-legend {
+      position: absolute;
+      bottom: 20px;
+      right: 12px;
+      z-index: 15;
+      background: white;
+      border-radius: 10px;
+      padding: 10px 14px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.1);
+      font-size: 11px;
+    }
+
+    /* Loading overlay */
+    #analysis-overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(255,255,255,0.75);
+      z-index: 30;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      gap: 12px;
+    }
+    #analysis-overlay.show { display: flex; }
+
+    /* Responsive: collapse left panel on small screens */
+    @media (max-width: 900px) {
+      #left-panel {
+        position: absolute;
+        left: 0; top: 0; bottom: 0;
+        z-index: 30;
+        box-shadow: 4px 0 24px rgba(0,0,0,0.15);
+        transform: translateX(-100%);
+        transition: transform 0.3s ease;
+      }
+      #left-panel.mobile-open { transform: translateX(0); }
+      .mobile-panel-toggle { display: flex !important; }
+    }
+    @media (min-width: 901px) {
+      .mobile-panel-toggle { display: none !important; }
+    }
+
+    /* Quick stat pill */
+    .stat-pill {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: #f9fafb;
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+      padding: 8px 12px;
+    }
+
+    /* Day badge */
+    .day-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      background: #eff6ff;
+      color: #1d4ed8;
+      border: 1px solid #bfdbfe;
+      border-radius: 6px;
+      padding: 4px 10px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    /* Animate number count */
+    @keyframes countUp {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .count-anim { animation: countUp 0.4s ease-out; }
+  </style>
+</head>
+<body class="bg-gray-50">
+
+  <!-- Header -->
+  <div id="dashboard-wrap">
+    <div id="app-header"></div>
+
+    <!-- Main Dashboard Body -->
+    <div id="dashboard-body">
+
+      <!-- Mobile Panel Toggle Button -->
+      <button class="mobile-panel-toggle" onclick="toggleLeftPanel()"
+        style="display:none; position:absolute; top:12px; left:12px; z-index:35;
+               background:white; border:none; border-radius:10px; padding:8px 12px;
+               box-shadow:0 2px 12px rgba(0,0,0,0.15); cursor:pointer; align-items:center; gap:6px; font-size:13px; font-weight:600; color:#374151;">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
+        설정
+      </button>
+
+      <!-- ═══════════ LEFT PANEL ═══════════ -->
+      <div id="left-panel">
+        <!-- Panel Header -->
+        <div style="padding: 16px 20px 12px; border-bottom: 1px solid #f3f4f6; background: linear-gradient(135deg, #fffbeb 0%, #ffffff 100%);">
+          <div style="display:flex; align-items:center; justify-content:space-between;">
+            <div>
+              <h2 style="font-size: 16px; font-weight: 800; color: #111827; margin: 0;">AI 빈차 분석</h2>
+              <p style="font-size: 11px; color: #6b7280; margin: 4px 0 0;">수요 예측 기반 최적 운행 경로</p>
+            </div>
+            <div style="display:flex; align-items:center; gap:6px;">
+              <span class="status-dot active" id="status-dot"></span>
+              <span style="font-size:11px; color:#6b7280;" id="status-text">대기중</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Panel Content - Scrollable -->
+        <div style="flex:1; overflow-y:auto; padding: 16px 20px;">
+
+          <!-- 현재 위치 설정 -->
+          <div style="margin-bottom: 18px;">
+            <div class="section-title">현재 위치</div>
+            <select id="sel-district" class="field-select" onchange="onDistrictChange()">
+              <option value="current">현재 위치 사용</option>
+            </select>
+            <div id="location-info" style="margin-top:6px; font-size:11px; color:#6b7280; display:flex; align-items:center; gap:4px;">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#6b7280" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>
+              <span id="location-label">위치를 선택하세요</span>
+            </div>
+          </div>
+
+          <!-- 시간 설정 -->
+          <div style="margin-bottom: 18px;">
+            <div class="section-title">분석 시간</div>
+            <div style="display:flex; gap:8px; align-items:center;">
+              <input type="time" id="sel-time" class="field-input" style="flex:1;" onchange="onTimeChange()">
+              <button onclick="setCurrentTime()" style="padding:6px 10px; border:1px solid #d1d5db; border-radius:8px; font-size:11px; cursor:pointer; background:white; color:#374151; font-family:'Pretendard Variable',sans-serif; white-space:nowrap; transition:all 0.2s;"
+                onmouseover="this.style.borderColor='#f59e0b';this.style.background='#fffbeb'"
+                onmouseout="this.style.borderColor='#d1d5db';this.style.background='white'">
+                지금
+              </button>
+            </div>
+          </div>
+
+          <!-- 요일 표시 -->
+          <div style="margin-bottom: 18px;">
+            <div class="section-title">요일</div>
+            <div style="display:flex; align-items:center; gap:8px;">
+              <div class="day-badge" id="day-badge">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+                <span id="day-label">--</span>
+              </div>
+              <span style="font-size:11px; color:#9ca3af;" id="day-weight-label">수요 가중치: --</span>
+            </div>
+          </div>
+
+          <!-- 날씨 설정 -->
+          <div style="margin-bottom: 18px;">
+            <div class="section-title">날씨</div>
+            <div style="display:flex; flex-wrap:wrap; gap:6px;" id="weather-buttons">
+              <button class="weather-btn selected" data-weather="clear" onclick="selectWeather('clear')">맑음</button>
+              <button class="weather-btn" data-weather="cloudy" onclick="selectWeather('cloudy')">흐림</button>
+              <button class="weather-btn" data-weather="rain" onclick="selectWeather('rain')">비</button>
+              <button class="weather-btn" data-weather="heavy_rain" onclick="selectWeather('heavy_rain')">폭우</button>
+              <button class="weather-btn" data-weather="snow" onclick="selectWeather('snow')">눈</button>
+            </div>
+            <div style="margin-top:6px; font-size:11px; color:#6b7280; display:flex; align-items:center; gap:4px;">
+              <span id="weather-effect">수요 영향: x1.00</span>
+            </div>
+          </div>
+
+          <!-- 구분선 -->
+          <hr style="border:none; border-top:1px solid #f3f4f6; margin:16px 0;">
+
+          <!-- 빠른 통계 -->
+          <div style="margin-bottom: 18px;" id="quick-stats-area">
+            <div class="section-title">현재 수요 요약</div>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+              <div class="stat-pill">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>
+                <div>
+                  <div style="font-size:10px; color:#9ca3af;">평균 수요</div>
+                  <div style="font-size:14px; font-weight:700; color:#111827;" id="stat-avg-demand">--</div>
+                </div>
+              </div>
+              <div class="stat-pill">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+                <div>
+                  <div style="font-size:10px; color:#9ca3af;">핫스팟 수</div>
+                  <div style="font-size:14px; font-weight:700; color:#111827;" id="stat-hotspot-count">--</div>
+                </div>
+              </div>
+              <div class="stat-pill">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
+                <div>
+                  <div style="font-size:10px; color:#9ca3af;">예상 시급</div>
+                  <div style="font-size:14px; font-weight:700; color:#111827;" id="stat-hourly-income">--</div>
+                </div>
+              </div>
+              <div class="stat-pill">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+                <div>
+                  <div style="font-size:10px; color:#9ca3af;">수요 등급</div>
+                  <div style="font-size:14px; font-weight:700;" id="stat-demand-grade">--</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 구분선 -->
+          <hr style="border:none; border-top:1px solid #f3f4f6; margin:16px 0;">
+
+          <!-- AI 분석 시작 버튼 -->
+          <button class="btn-analyze" id="btn-analyze" onclick="runAnalysis()">
+            <span id="btn-analyze-content" style="display:flex; align-items:center; justify-content:center; gap:8px;">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+              </svg>
+              AI 분석 시작
+            </span>
+            <span id="btn-analyze-loading" style="display:none; align-items:center; justify-content:center; gap:8px;">
+              <span class="spinner" style="width:18px; height:18px; border-width:2px;"></span>
+              분석 중...
+            </span>
+          </button>
+
+          <!-- 분석 옵션 (접이식) -->
+          <div style="margin-top:12px;">
+            <button onclick="toggleAdvanced()" style="font-size:11px; color:#6b7280; background:none; border:none; cursor:pointer; display:flex; align-items:center; gap:4px; font-family:'Pretendard Variable',sans-serif;"
+              onmouseover="this.style.color='#f59e0b'" onmouseout="this.style.color='#6b7280'">
+              <svg id="adv-arrow" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="transition:transform 0.2s;"><path d="M6 9l6 6 6-6"/></svg>
+              고급 설정
+            </button>
+            <div id="advanced-options" style="display:none; margin-top:10px;">
+              <div style="margin-bottom:10px;">
+                <label style="font-size:11px; color:#6b7280; display:block; margin-bottom:4px;">경유지 수 (최대)</label>
+                <input type="range" id="max-stops" min="3" max="10" value="5" style="width:100%; accent-color:#f59e0b;" oninput="document.getElementById('max-stops-val').textContent=this.value">
+                <div style="display:flex; justify-content:space-between; font-size:10px; color:#9ca3af;">
+                  <span>3개</span>
+                  <span style="font-weight:600; color:#374151;" id="max-stops-val">5</span>
+                  <span>10개</span>
+                </div>
+              </div>
+              <div>
+                <label style="font-size:11px; color:#6b7280; display:block; margin-bottom:4px;">히트맵 반경</label>
+                <input type="range" id="heat-radius" min="15" max="40" value="25" style="width:100%; accent-color:#f59e0b;" oninput="document.getElementById('heat-radius-val').textContent=this.value+'px'">
+                <div style="display:flex; justify-content:space-between; font-size:10px; color:#9ca3af;">
+                  <span>15px</span>
+                  <span style="font-weight:600; color:#374151;" id="heat-radius-val">25px</span>
+                  <span>40px</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 여유 공간 -->
+          <div style="height:20px;"></div>
+
+        </div><!-- /Panel Content -->
+      </div><!-- /Left Panel -->
+
+      <!-- ═══════════ MAP AREA ═══════════ -->
+      <div id="map-area">
+
+        <!-- Map -->
+        <div id="map"></div>
+
+        <!-- Map Status Bar -->
+        <div class="map-status-bar" id="map-status-bar">
+          <span class="status-dot active" style="width:6px;height:6px;"></span>
+          <span style="color:#374151; font-weight:600;">서울시</span>
+          <span style="color:#9ca3af;">|</span>
+          <span style="color:#6b7280;" id="map-time-display">--:--</span>
+          <span style="color:#9ca3af;">|</span>
+          <span style="color:#6b7280;" id="map-weather-display">맑음</span>
+        </div>
+
+        <!-- Map Legend -->
+        <div class="map-legend" id="map-legend" style="display:none;">
+          <div style="font-weight:700; margin-bottom:6px; color:#374151;">수요 히트맵</div>
+          <div class="heatmap-legend-bar" style="margin-bottom:4px;"></div>
+          <div style="display:flex; justify-content:space-between; color:#9ca3af;">
+            <span>낮음</span>
+            <span>높음</span>
+          </div>
+          <hr style="border:none; border-top:1px solid #e5e7eb; margin:8px 0;">
+          <div style="display:flex; flex-direction:column; gap:4px;">
+            <div style="display:flex; align-items:center; gap:6px;">
+              <div style="width:14px;height:14px;border-radius:50%;background:#dc2626;border:2px solid white;box-shadow:0 1px 3px rgba(0,0,0,0.2);"></div>
+              <span style="color:#6b7280;">고수요 핫스팟 (80+)</span>
+            </div>
+            <div style="display:flex; align-items:center; gap:6px;">
+              <div style="width:14px;height:14px;border-radius:50%;background:#ea580c;border:2px solid white;box-shadow:0 1px 3px rgba(0,0,0,0.2);"></div>
+              <span style="color:#6b7280;">중수요 핫스팟 (65+)</span>
+            </div>
+            <div style="display:flex; align-items:center; gap:6px;">
+              <div style="width:14px;height:14px;border-radius:50%;background:#eab308;border:2px solid white;box-shadow:0 1px 3px rgba(0,0,0,0.2);"></div>
+              <span style="color:#6b7280;">일반 핫스팟</span>
+            </div>
+            <div style="display:flex; align-items:center; gap:6px;">
+              <div style="width:18px;height:18px;display:flex;align-items:center;justify-content:center;font-size:14px;">&#x1F695;</div>
+              <span style="color:#6b7280;">현재 위치</span>
+            </div>
+            <div style="display:flex; align-items:center; gap:6px;">
+              <div style="width:14px;height:3px;background:#f59e0b;border-radius:2px;"></div>
+              <span style="color:#6b7280;">추천 경로</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Analysis Loading Overlay -->
+        <div id="analysis-overlay">
+          <div class="spinner" style="width:40px;height:40px;border-width:4px;"></div>
+          <div style="font-size:14px; font-weight:600; color:#374151;">AI 분석 중...</div>
+          <div style="font-size:12px; color:#9ca3af;" id="analysis-step">수요 데이터 수집</div>
+        </div>
+
+        <!-- ═══════════ BOTTOM RESULT PANEL ═══════════ -->
+        <div id="bottom-panel">
+          <!-- Handle -->
+          <div class="bottom-handle" style="cursor:pointer;" onclick="toggleBottomPanel()"></div>
+
+          <!-- Panel Header -->
+          <div style="display:flex; align-items:center; justify-content:space-between; padding: 4px 20px 10px;">
+            <div style="display:flex; align-items:center; gap:10px;">
+              <h3 style="font-size:15px; font-weight:800; color:#111827; margin:0;">AI 추천 결과</h3>
+              <span style="font-size:11px; color:#6b7280; background:#f3f4f6; padding:2px 8px; border-radius:4px;" id="result-timestamp">--</span>
+            </div>
+            <button onclick="hideBottomPanel()" style="background:none; border:none; cursor:pointer; padding:4px; color:#9ca3af;" title="닫기"
+              onmouseover="this.style.color='#374151'" onmouseout="this.style.color='#9ca3af'">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+            </button>
+          </div>
+
+          <!-- Panel Content -->
+          <div style="display:flex; gap:0; padding: 0 20px 16px; overflow-x:auto;" id="bottom-content">
+            <!-- Top 5 Hotspots -->
+            <div style="flex:1; min-width:420px; padding-right:16px;">
+              <div style="font-size:11px; font-weight:700; color:#9ca3af; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:8px;">Top 5 추천 핫스팟</div>
+              <div id="result-hotspots" style="display:flex; flex-direction:column; gap:6px;">
+                <!-- Filled dynamically -->
+              </div>
+            </div>
+
+            <!-- Divider -->
+            <div style="width:1px; background:#e5e7eb; margin:0 16px; flex-shrink:0;"></div>
+
+            <!-- Revenue Estimate -->
+            <div style="min-width:200px; padding-right:16px;">
+              <div style="font-size:11px; font-weight:700; color:#9ca3af; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:8px;">예상 수익</div>
+              <div id="result-revenue" style="display:flex; flex-direction:column; gap:8px;">
+                <!-- Filled dynamically -->
+              </div>
+            </div>
+
+            <!-- Divider -->
+            <div style="width:1px; background:#e5e7eb; margin:0 16px; flex-shrink:0;"></div>
+
+            <!-- Route Summary -->
+            <div style="min-width:200px;">
+              <div style="font-size:11px; font-weight:700; color:#9ca3af; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:8px;">경로 요약</div>
+              <div id="result-route-summary" style="display:flex; flex-direction:column; gap:8px;">
+                <!-- Filled dynamically -->
+              </div>
+            </div>
+          </div>
+        </div><!-- /bottom-panel -->
+
+      </div><!-- /map-area -->
+
+    </div><!-- /dashboard-body -->
+
+    <!-- Footer (hidden on dashboard for full-screen map) -->
+    <div id="app-footer" style="display:none;"></div>
+  </div><!-- /dashboard-wrap -->
+
+  <!-- ═══════════ SCRIPTS ═══════════ -->
+  <script src="js/mock-data.js"></script>
+  <script src="js/shared.js"></script>
+  <script src="js/map-engine.js"></script>
+  <script src="js/route-algorithm.js"></script>
+  <script src="js/demand-engine.js"></script>
+
+  <script>
+  /* ═══════════════════════════════════════════
+     Dashboard State & Variables
+     ═══════════════════════════════════════════ */
+  var map;
+  var heatLayer = null;
+  var routePolyline = null;
+  var taxiMarker = null;
+  var hotspotMarkers = [];
+  var routeMarkers = [];
+
+  // Current settings
+  var currentDistrict = 'current';  // 'current' = use GPS/default
+  var currentHour = new Date().getHours();
+  var currentMinute = new Date().getMinutes();
+  var currentDayOfWeek = new Date().getDay();
+  var currentWeather = 'clear';
+  var currentPosition = { lat: 37.5665, lng: 126.9780 }; // Default: Seoul city center
+
+  // Analysis results
+  var lastAnalysisResult = null;
+  var isAnalysisRunning = false;
+  var bottomPanelVisible = false;
+
+  // Day names
+  var DAY_NAMES = ['일요일', '월요일', '화요일', '수요일', '목요일', '금요일', '토요일'];
+  var DAY_SHORT = ['일', '월', '화', '수', '목', '금', '토'];
+
+  // Weather labels
+  var WEATHER_LABELS = {
+    'clear': '맑음', 'cloudy': '흐림', 'rain': '비',
+    'heavy_rain': '폭우', 'snow': '눈'
+  };
+  var WEATHER_ICONS = {
+    'clear': '\u2600\uFE0F', 'cloudy': '\u2601\uFE0F', 'rain': '\uD83C\uDF27\uFE0F',
+    'heavy_rain': '\u26C8\uFE0F', 'snow': '\u2744\uFE0F'
+  };
+
+  /* ═══════════════════════════════════════════
+     Initialization
+     ═══════════════════════════════════════════ */
+  document.addEventListener('DOMContentLoaded', function() {
+    // Initialize header (no footer for full-screen dashboard)
+    initPage('dashboard');
+
+    // Populate district dropdown
+    populateDistrictDropdown();
+
+    // Set current time
+    setCurrentTime();
+
+    // Set current day of week
+    updateDayDisplay();
+
+    // Initialize map
+    map = initMap('map', [37.5665, 126.9780], 12);
+
+    // Add initial taxi marker at default position
+    taxiMarker = addTaxiMarker(map, currentPosition.lat, currentPosition.lng);
+
+    // Load initial heatmap
+    updateQuickStats();
+    updateMap();
+
+    // Show map legend
+    document.getElementById('map-legend').style.display = 'block';
+
+    // Try geolocation
+    tryGeolocation();
+  });
+
+  /* ── Populate District Dropdown ── */
+  function populateDistrictDropdown() {
+    var sel = document.getElementById('sel-district');
+    SEOUL_DISTRICTS.forEach(function(d) {
+      var opt = document.createElement('option');
+      opt.value = d.id;
+      opt.textContent = d.name;
+      sel.appendChild(opt);
+    });
+  }
+
+  /* ── Geolocation ── */
+  function tryGeolocation() {
+    if (!navigator.geolocation) return;
+    navigator.geolocation.getCurrentPosition(function(pos) {
+      // Only use if within Seoul bounds roughly
+      var lat = pos.coords.latitude;
+      var lng = pos.coords.longitude;
+      if (lat > 37.41 && lat < 37.72 && lng > 126.76 && lng < 127.19) {
+        if (currentDistrict === 'current') {
+          currentPosition = { lat: lat, lng: lng };
+          updateTaxiPosition();
+          document.getElementById('location-label').textContent =
+            '내 위치: ' + lat.toFixed(4) + ', ' + lng.toFixed(4);
+        }
+      }
+    }, function() {
+      // Geolocation failed, use default
+      document.getElementById('location-label').textContent = '기본 위치: 서울 시청 (GPS 사용 불가)';
+    }, { timeout: 5000 });
+  }
+
+  /* ═══════════════════════════════════════════
+     Settings Handlers
+     ═══════════════════════════════════════════ */
+
+  /* ── District Change ── */
+  function onDistrictChange() {
+    var sel = document.getElementById('sel-district');
+    currentDistrict = sel.value;
+
+    if (currentDistrict === 'current') {
+      currentPosition = { lat: 37.5665, lng: 126.9780 };
+      document.getElementById('location-label').textContent = '기본 위치: 서울 시청';
+      tryGeolocation();
+    } else {
+      var district = SEOUL_DISTRICTS.find(function(d) { return d.id === currentDistrict; });
+      if (district) {
+        currentPosition = { lat: district.lat, lng: district.lng };
+        document.getElementById('location-label').textContent = district.name + ' 중심';
+      }
+    }
+    updateTaxiPosition();
+    updateQuickStats();
+    updateMap();
+  }
+
+  /* ── Time Change ── */
+  function onTimeChange() {
+    var timeVal = document.getElementById('sel-time').value;
+    if (!timeVal) return;
+    var parts = timeVal.split(':');
+    currentHour = parseInt(parts[0]);
+    currentMinute = parseInt(parts[1]);
+    document.getElementById('map-time-display').textContent = timeVal;
+    updateQuickStats();
+    updateMap();
+  }
+
+  function setCurrentTime() {
+    var now = new Date();
+    currentHour = now.getHours();
+    currentMinute = now.getMinutes();
+    var h = (currentHour < 10 ? '0' : '') + currentHour;
+    var m = (currentMinute < 10 ? '0' : '') + currentMinute;
+    document.getElementById('sel-time').value = h + ':' + m;
+    document.getElementById('map-time-display').textContent = h + ':' + m;
+    updateDayDisplay();
+    updateQuickStats();
+  }
+
+  /* ── Day Display ── */
+  function updateDayDisplay() {
+    currentDayOfWeek = new Date().getDay();
+    var dayName = DAY_NAMES[currentDayOfWeek];
+    var weight = DAY_WEIGHTS[currentDayOfWeek];
+    document.getElementById('day-label').textContent = dayName;
+    document.getElementById('day-weight-label').textContent = '수요 가중치: x' + weight.toFixed(2);
+
+    // Highlight weekends
+    var badge = document.getElementById('day-badge');
+    if (currentDayOfWeek === 0 || currentDayOfWeek === 6) {
+      badge.style.background = '#fef2f2';
+      badge.style.color = '#dc2626';
+      badge.style.borderColor = '#fecaca';
+    } else if (currentDayOfWeek === 5) {
+      badge.style.background = '#f0fdf4';
+      badge.style.color = '#16a34a';
+      badge.style.borderColor = '#bbf7d0';
+    }
+  }
+
+  /* ── Weather Selection ── */
+  function selectWeather(weather) {
+    currentWeather = weather;
+    var buttons = document.querySelectorAll('.weather-btn');
+    buttons.forEach(function(btn) {
+      if (btn.getAttribute('data-weather') === weather) {
+        btn.classList.add('selected');
+      } else {
+        btn.classList.remove('selected');
+      }
+    });
+
+    var wWeight = WEATHER_WEIGHTS[weather] || 1.0;
+    document.getElementById('weather-effect').textContent = '수요 영향: x' + wWeight.toFixed(2);
+    document.getElementById('map-weather-display').textContent = WEATHER_LABELS[weather] || weather;
+
+    updateQuickStats();
+    updateMap();
+  }
+
+  /* ═══════════════════════════════════════════
+     Map Update
+     ═══════════════════════════════════════════ */
+  function updateMap() {
+    // Remove existing heat layer
+    if (heatLayer) {
+      map.removeLayer(heatLayer);
+      heatLayer = null;
+    }
+
+    // Remove existing hotspot markers
+    hotspotMarkers.forEach(function(m) { map.removeLayer(m); });
+    hotspotMarkers = [];
+
+    // Generate heatmap data
+    var heatData = generateHeatmapData(currentHour, currentDayOfWeek, currentWeather);
+    var radius = parseInt(document.getElementById('heat-radius').value) || 25;
+    heatLayer = addHeatLayer(map, heatData, { radius: radius });
+
+    // Add hotspot markers (only high-demand ones to avoid clutter)
+    HOTSPOTS.forEach(function(hs) {
+      var score = calculateDemandScore(hs, currentHour, currentDayOfWeek, currentWeather);
+      if (score >= 50) {
+        var marker = addHotspotMarker(map, hs, score);
+        hotspotMarkers.push(marker);
+      }
+    });
+  }
+
+  /* ── Update Taxi Position ── */
+  function updateTaxiPosition() {
+    if (taxiMarker) map.removeLayer(taxiMarker);
+    taxiMarker = addTaxiMarker(map, currentPosition.lat, currentPosition.lng);
+    map.panTo([currentPosition.lat, currentPosition.lng]);
+  }
+
+  /* ── Quick Stats ── */
+  function updateQuickStats() {
+    // Calculate average demand
+    var totalScore = 0;
+    var highCount = 0;
+    HOTSPOTS.forEach(function(hs) {
+      var score = calculateDemandScore(hs, currentHour, currentDayOfWeek, currentWeather);
+      totalScore += score;
+      if (score >= 65) highCount++;
+    });
+    var avgScore = Math.round(totalScore / HOTSPOTS.length);
+    var grade = getDemandGrade(avgScore);
+
+    document.getElementById('stat-avg-demand').textContent = avgScore + '점';
+    document.getElementById('stat-hotspot-count').textContent = highCount + '곳';
+
+    // Estimate hourly income (rough)
+    var hourlyDemand = HOURLY_DEMAND[currentHour] || 0.5;
+    var weatherMult = WEATHER_WEIGHTS[currentWeather] || 1.0;
+    var dayMult = DAY_WEIGHTS[currentDayOfWeek] || 1.0;
+    var estTrips = Math.round(2.5 * hourlyDemand * weatherMult * dayMult);
+    var estIncome = estTrips * 9500;
+    document.getElementById('stat-hourly-income').textContent = fmtWon(estIncome);
+
+    var gradeEl = document.getElementById('stat-demand-grade');
+    gradeEl.textContent = grade.grade + ' (' + grade.label + ')';
+    gradeEl.className = 'text-sm font-bold ' + grade.color.split(' ')[0];
+    gradeEl.style.fontSize = '14px';
+    gradeEl.style.fontWeight = '700';
+  }
+
+  /* ═══════════════════════════════════════════
+     AI Analysis (Main Function)
+     ═══════════════════════════════════════════ */
+  async function runAnalysis() {
+    if (isAnalysisRunning) return;
+    isAnalysisRunning = true;
+
+    // UI: disable button, show overlay
+    var btn = document.getElementById('btn-analyze');
+    btn.disabled = true;
+    document.getElementById('btn-analyze-content').style.display = 'none';
+    document.getElementById('btn-analyze-loading').style.display = 'flex';
+
+    var overlay = document.getElementById('analysis-overlay');
+    overlay.classList.add('show');
+
+    // Status
+    var statusDot = document.getElementById('status-dot');
+    var statusText = document.getElementById('status-text');
+    statusDot.classList.remove('idle');
+    statusDot.classList.add('active');
+    statusText.textContent = '분석중';
+    statusText.style.color = '#f59e0b';
+
+    var stepEl = document.getElementById('analysis-step');
+
+    // Step 1: Collecting demand data
+    stepEl.textContent = '1/4 수요 데이터 수집 중...';
+    await delay(500);
+
+    // Step 2: Calculating demand scores
+    stepEl.textContent = '2/4 수요 점수 계산 중...';
+    await delay(400);
+
+    // Calculate route
+    var maxStops = parseInt(document.getElementById('max-stops').value) || 5;
+    var routeResult = planEmptyCarRoute(
+      currentPosition, HOTSPOTS,
+      currentHour, currentDayOfWeek, currentWeather,
+      maxStops
+    );
+
+    // Step 3: Optimizing route
+    stepEl.textContent = '3/4 최적 경로 탐색 중...';
+    await delay(500);
+
+    // Step 4: Get OSRM route (real road directions)
+    stepEl.textContent = '4/4 도로 경로 생성 중...';
+
+    var waypoints = routeResult.route.map(function(r) { return { lat: r.lat, lng: r.lng }; });
+    var osrmResult = await getOSRMRoute(waypoints);
+    await delay(300);
+
+    // Use OSRM data if available
+    if (osrmResult.distance > 0) {
+      routeResult.totalDistance = osrmResult.distance;
+      routeResult.estimatedTime = osrmResult.duration;
+      routeResult.fuelCost = Math.round(osrmResult.distance * 160);
+    }
+
+    // Store result
+    lastAnalysisResult = routeResult;
+
+    // Clear old route visuals
+    clearRouteVisuals();
+
+    // Draw heatmap again (might have changed)
+    updateMap();
+
+    // Draw route polyline
+    var routeCoords;
+    if (osrmResult.geometry && osrmResult.geometry.length > 2) {
+      routeCoords = osrmResult.geometry;
+    } else {
+      routeCoords = routeResult.route.map(function(r) { return [r.lat, r.lng]; });
+    }
+    routePolyline = addRoutePolyline(map, routeCoords, { color: '#f59e0b', weight: 5, opacity: 0.85 });
+
+    // Draw route stop markers (numbered)
+    var stopNum = 0;
+    routeResult.route.forEach(function(spot, i) {
+      if (spot.type === 'start') return;
+      stopNum++;
+      var color = spot.score >= 80 ? 'red' : spot.score >= 65 ? 'orange' : 'amber';
+      var popup = '<div>' +
+        '<p class="font-bold text-sm">' + stopNum + '. ' + spot.name + '</p>' +
+        '<p class="text-xs text-gray-500">' + (spot.district || '') + ' / ' + (spot.hotspotType || '') + '</p>' +
+        '<p class="text-xs mt-1">수요 점수: <b class="' + getScoreColor(spot.score) + '">' + spot.score + '</b></p>' +
+        '<p class="text-xs">평균 요금: <b>' + fmt(spot.avgFare || 0) + '원</b></p>' +
+        '<p class="text-xs">평균 대기: <b>' + (spot.avgWait || '-') + '분</b></p>' +
+        '</div>';
+      var m = addNumberedMarker(map, spot.lat, spot.lng, stopNum, color, popup);
+      routeMarkers.push(m);
+    });
+
+    // Fit map to show route
+    var bounds = routeResult.route.map(function(r) { return { lat: r.lat, lng: r.lng }; });
+    fitMapBounds(map, bounds);
+
+    // Hide overlay
+    overlay.classList.remove('show');
+
+    // Re-enable button
+    btn.disabled = false;
+    document.getElementById('btn-analyze-content').style.display = 'flex';
+    document.getElementById('btn-analyze-loading').style.display = 'none';
+
+    // Status
+    statusText.textContent = '분석 완료';
+    statusText.style.color = '#16a34a';
+
+    // Show bottom panel with results
+    renderBottomResults(routeResult);
+    showBottomPanel();
+
+    isAnalysisRunning = false;
+  }
+
+  /* ── Clear Route Visuals ── */
+  function clearRouteVisuals() {
+    if (routePolyline) { map.removeLayer(routePolyline); routePolyline = null; }
+    routeMarkers.forEach(function(m) { map.removeLayer(m); });
+    routeMarkers = [];
+  }
+
+  /* ── Render Bottom Panel Results ── */
+  function renderBottomResults(result) {
+    var now = new Date();
+    var ts = (now.getHours() < 10 ? '0' : '') + now.getHours() + ':' +
+             (now.getMinutes() < 10 ? '0' : '') + now.getMinutes() + ':' +
+             (now.getSeconds() < 10 ? '0' : '') + now.getSeconds();
+    document.getElementById('result-timestamp').textContent = ts + ' 분석';
+
+    // ── Top 5 Hotspots ──
+    var hotspotsHtml = '';
+    var hotspotStops = result.route.filter(function(r) { return r.type === 'hotspot'; });
+    hotspotStops.sort(function(a, b) { return b.score - a.score; });
+    var top5 = hotspotStops.slice(0, 5);
+
+    top5.forEach(function(spot, idx) {
+      var grade = getDemandGrade(spot.score);
+      var bgColor = spot.score >= 80 ? '#dc2626' : spot.score >= 65 ? '#ea580c' : spot.score >= 50 ? '#eab308' : '#22c55e';
+
+      hotspotsHtml += '<div class="hotspot-result-card" onclick="focusHotspot(' + spot.lat + ',' + spot.lng + ')">' +
+        '<div class="rank-badge" style="background:' + bgColor + ';">' + (idx + 1) + '</div>' +
+        '<div style="flex:1; min-width:0;">' +
+          '<div style="font-size:13px; font-weight:700; color:#111827; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' + spot.name + '</div>' +
+          '<div style="font-size:11px; color:#6b7280;">' + (spot.district || '') + ' / ' + (spot.hotspotType || '') + '</div>' +
+        '</div>' +
+        '<div style="text-align:right; flex-shrink:0;">' +
+          '<div style="font-size:15px; font-weight:800;" class="' + getScoreColor(spot.score) + '">' + spot.score + '</div>' +
+          '<div style="font-size:10px; color:#9ca3af;">' + grade.label + '</div>' +
+        '</div>' +
+      '</div>';
+    });
+    document.getElementById('result-hotspots').innerHTML = hotspotsHtml;
+
+    // ── Revenue Estimate ──
+    var totalPickupFare = 0;
+    hotspotStops.forEach(function(s) { totalPickupFare += (s.avgFare || 8500); });
+    var expectedPickups = result.expectedPickups;
+    var estRevenue = expectedPickups * (hotspotStops.length > 0 ? Math.round(totalPickupFare / hotspotStops.length) : 9000);
+    var netRevenue = estRevenue - result.fuelCost;
+
+    var revHtml = '';
+    revHtml += '<div style="display:flex; align-items:center; gap:8px;">' +
+      '<div style="width:32px;height:32px;border-radius:8px;background:#f0fdf4;display:flex;align-items:center;justify-content:center;">' +
+        '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>' +
+      '</div>' +
+      '<div>' +
+        '<div style="font-size:10px; color:#9ca3af;">예상 수입</div>' +
+        '<div style="font-size:18px; font-weight:800; color:#16a34a;">' + fmtWon(estRevenue) + '</div>' +
+      '</div>' +
+    '</div>';
+
+    revHtml += '<div style="display:flex; align-items:center; gap:8px;">' +
+      '<div style="width:32px;height:32px;border-radius:8px;background:#fef2f2;display:flex;align-items:center;justify-content:center;">' +
+        '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#dc2626" stroke-width="2"><path d="M3 3h18v18H3z"/><path d="M12 8v8M8 12h8"/></svg>' +
+      '</div>' +
+      '<div>' +
+        '<div style="font-size:10px; color:#9ca3af;">연료비</div>' +
+        '<div style="font-size:14px; font-weight:700; color:#dc2626;">-' + fmtWon(result.fuelCost) + '</div>' +
+      '</div>' +
+    '</div>';
+
+    revHtml += '<div style="display:flex; align-items:center; gap:8px;">' +
+      '<div style="width:32px;height:32px;border-radius:8px;background:#fffbeb;display:flex;align-items:center;justify-content:center;">' +
+        '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#d97706" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>' +
+      '</div>' +
+      '<div>' +
+        '<div style="font-size:10px; color:#9ca3af;">순수익</div>' +
+        '<div style="font-size:16px; font-weight:800; color:#d97706;">' + fmtWon(netRevenue) + '</div>' +
+      '</div>' +
+    '</div>';
+
+    revHtml += '<div style="font-size:11px; color:#6b7280; margin-top:2px;">예상 탑승: <b>' + expectedPickups + '건</b> / 평균 요금: <b>' +
+      fmtWon(hotspotStops.length > 0 ? Math.round(totalPickupFare / hotspotStops.length) : 0) + '</b></div>';
+
+    document.getElementById('result-revenue').innerHTML = revHtml;
+
+    // ── Route Summary ──
+    var summaryHtml = '';
+
+    summaryHtml += '<div style="display:flex; align-items:center; gap:8px;">' +
+      '<div style="width:32px;height:32px;border-radius:8px;background:#eff6ff;display:flex;align-items:center;justify-content:center;">' +
+        '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>' +
+      '</div>' +
+      '<div>' +
+        '<div style="font-size:10px; color:#9ca3af;">총 거리</div>' +
+        '<div style="font-size:16px; font-weight:800; color:#2563eb;">' + result.totalDistance.toFixed(1) + ' km</div>' +
+      '</div>' +
+    '</div>';
+
+    summaryHtml += '<div style="display:flex; align-items:center; gap:8px;">' +
+      '<div style="width:32px;height:32px;border-radius:8px;background:#faf5ff;display:flex;align-items:center;justify-content:center;">' +
+        '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>' +
+      '</div>' +
+      '<div>' +
+        '<div style="font-size:10px; color:#9ca3af;">예상 소요 시간</div>' +
+        '<div style="font-size:16px; font-weight:800; color:#7c3aed;">' + result.estimatedTime + '분</div>' +
+      '</div>' +
+    '</div>';
+
+    summaryHtml += '<div style="display:flex; align-items:center; gap:8px;">' +
+      '<div style="width:32px;height:32px;border-radius:8px;background:#fff7ed;display:flex;align-items:center;justify-content:center;">' +
+        '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ea580c" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/></svg>' +
+      '</div>' +
+      '<div>' +
+        '<div style="font-size:10px; color:#9ca3af;">경유 핫스팟</div>' +
+        '<div style="font-size:16px; font-weight:800; color:#ea580c;">' + hotspotStops.length + '곳</div>' +
+      '</div>' +
+    '</div>';
+
+    summaryHtml += '<div style="display:flex; align-items:center; gap:8px;">' +
+      '<div style="width:32px;height:32px;border-radius:8px;background:#ecfdf5;display:flex;align-items:center;justify-content:center;">' +
+        '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#059669" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>' +
+      '</div>' +
+      '<div>' +
+        '<div style="font-size:10px; color:#9ca3af;">평균 수요 점수</div>' +
+        '<div style="font-size:16px; font-weight:800; color:#059669;">' + result.avgDemandScore + '점</div>' +
+      '</div>' +
+    '</div>';
+
+    document.getElementById('result-route-summary').innerHTML = summaryHtml;
+  }
+
+  /* ═══════════════════════════════════════════
+     Bottom Panel Toggle
+     ═══════════════════════════════════════════ */
+  function showBottomPanel() {
+    var panel = document.getElementById('bottom-panel');
+    panel.classList.add('visible');
+    bottomPanelVisible = true;
+  }
+
+  function hideBottomPanel() {
+    var panel = document.getElementById('bottom-panel');
+    panel.classList.remove('visible');
+    bottomPanelVisible = false;
+  }
+
+  function toggleBottomPanel() {
+    if (bottomPanelVisible) {
+      hideBottomPanel();
+    } else {
+      showBottomPanel();
+    }
+  }
+
+  /* ═══════════════════════════════════════════
+     Helper Functions
+     ═══════════════════════════════════════════ */
+
+  /* ── Focus on a hotspot on the map ── */
+  function focusHotspot(lat, lng) {
+    map.setView([lat, lng], 15);
+  }
+
+  /* ── Toggle Advanced Settings ── */
+  function toggleAdvanced() {
+    var el = document.getElementById('advanced-options');
+    var arrow = document.getElementById('adv-arrow');
+    if (el.style.display === 'none') {
+      el.style.display = 'block';
+      arrow.style.transform = 'rotate(180deg)';
+    } else {
+      el.style.display = 'none';
+      arrow.style.transform = 'rotate(0deg)';
+    }
+  }
+
+  /* ── Toggle Left Panel (Mobile) ── */
+  function toggleLeftPanel() {
+    document.getElementById('left-panel').classList.toggle('mobile-open');
+  }
+
+  /* ── Delay utility for analysis steps ── */
+  function delay(ms) {
+    return new Promise(function(resolve) { setTimeout(resolve, ms); });
+  }
+  </script>
+</body>
+</html>

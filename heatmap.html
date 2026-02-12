@@ -1,0 +1,1320 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>수요 히트맵 - 택시내비AI</title>
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Pretendard Font -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/variable/pretendardvariable.css">
+
+  <!-- Leaflet CSS / JS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <!-- Leaflet Heat -->
+  <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
+
+  <!-- Custom CSS -->
+  <link rel="stylesheet" href="css/custom.css">
+
+  <style>
+    /* ── 히트맵 페이지 전용 스타일 ── */
+    body { margin: 0; overflow: hidden; font-family: 'Pretendard Variable', 'Pretendard', system-ui, sans-serif; }
+
+    #heatmap-map { width: 100%; height: 100%; }
+
+    .control-panel {
+      position: absolute;
+      top: 76px; /* header height + gap */
+      left: 12px;
+      width: 340px;
+      max-height: calc(100vh - 92px);
+      z-index: 1000;
+      background: rgba(255, 255, 255, 0.96);
+      backdrop-filter: blur(12px);
+      border-radius: 16px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.15);
+      overflow-y: auto;
+      overflow-x: hidden;
+      border: 1px solid rgba(0,0,0,0.06);
+    }
+    .control-panel::-webkit-scrollbar { width: 4px; }
+    .control-panel::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 2px; }
+
+    .info-panel {
+      position: absolute;
+      top: 76px;
+      right: 12px;
+      width: 360px;
+      max-height: calc(100vh - 92px);
+      z-index: 1000;
+      background: rgba(255, 255, 255, 0.96);
+      backdrop-filter: blur(12px);
+      border-radius: 16px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.15);
+      overflow-y: auto;
+      overflow-x: hidden;
+      border: 1px solid rgba(0,0,0,0.06);
+    }
+    .info-panel::-webkit-scrollbar { width: 4px; }
+    .info-panel::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 2px; }
+
+    /* Time slider custom */
+    .time-slider {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 100%;
+      height: 8px;
+      border-radius: 4px;
+      background: linear-gradient(to right, #1e3a5f 0%, #f59e0b 35%, #ef4444 50%, #f59e0b 65%, #1e3a5f 100%);
+      outline: none;
+      cursor: pointer;
+    }
+    .time-slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: #f59e0b;
+      border: 3px solid white;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+      cursor: pointer;
+      transition: transform 0.15s;
+    }
+    .time-slider::-webkit-slider-thumb:hover {
+      transform: scale(1.2);
+    }
+    .time-slider::-moz-range-thumb {
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: #f59e0b;
+      border: 3px solid white;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+      cursor: pointer;
+    }
+
+    /* Play button animation */
+    .play-btn {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all 0.2s;
+      border: none;
+      font-size: 16px;
+    }
+    .play-btn:hover { transform: scale(1.1); }
+    .play-btn.playing {
+      background: #ef4444;
+      color: white;
+      box-shadow: 0 0 12px rgba(239,68,68,0.4);
+    }
+    .play-btn.paused {
+      background: #f59e0b;
+      color: white;
+      box-shadow: 0 0 12px rgba(245,158,11,0.4);
+    }
+
+    /* 24h bar chart */
+    .bar-chart-container {
+      display: flex;
+      align-items: flex-end;
+      gap: 2px;
+      height: 80px;
+      padding: 0 2px;
+    }
+    .bar-col {
+      flex: 1;
+      border-radius: 2px 2px 0 0;
+      transition: all 0.4s ease;
+      cursor: pointer;
+      position: relative;
+      min-width: 8px;
+    }
+    .bar-col:hover {
+      filter: brightness(1.2);
+    }
+    .bar-col.active {
+      outline: 2px solid #1e3a5f;
+      outline-offset: 1px;
+    }
+    .bar-label {
+      font-size: 8px;
+      text-align: center;
+      color: #94a3b8;
+      margin-top: 2px;
+    }
+
+    /* Hotspot rank item */
+    .hotspot-item {
+      transition: all 0.3s ease;
+      cursor: pointer;
+    }
+    .hotspot-item:hover {
+      background: #fffbeb;
+      transform: translateX(2px);
+    }
+
+    /* Type badge colors */
+    .type-교통 { background: #dbeafe; color: #1d4ed8; }
+    .type-업무 { background: #e0e7ff; color: #4338ca; }
+    .type-상업 { background: #fce7f3; color: #be185d; }
+    .type-유흥 { background: #faf5ff; color: #7c3aed; }
+    .type-관광 { background: #ecfdf5; color: #059669; }
+    .type-시장 { background: #fff7ed; color: #c2410c; }
+    .type-주거 { background: #f0fdf4; color: #15803d; }
+    .type-문화 { background: #fefce8; color: #a16207; }
+
+    /* District rank bar */
+    .district-bar {
+      height: 6px;
+      border-radius: 3px;
+      background: #e2e8f0;
+      overflow: hidden;
+    }
+    .district-bar-fill {
+      height: 100%;
+      border-radius: 3px;
+      transition: width 0.6s ease;
+    }
+
+    /* Panel section separator */
+    .panel-section {
+      border-bottom: 1px solid #f1f5f9;
+      padding: 14px 16px;
+    }
+    .panel-section:last-child {
+      border-bottom: none;
+    }
+
+    /* Panel toggle buttons */
+    .panel-toggle {
+      position: absolute;
+      top: 50%;
+      z-index: 1001;
+      background: rgba(255,255,255,0.95);
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 8px 4px;
+      cursor: pointer;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      transition: all 0.2s;
+    }
+    .panel-toggle:hover { background: #fffbeb; }
+    .panel-toggle-left { left: 358px; transform: translateY(-50%); }
+    .panel-toggle-right { right: 378px; transform: translateY(-50%); }
+
+    /* Current time big display */
+    .time-display {
+      font-size: 48px;
+      font-weight: 800;
+      line-height: 1;
+      background: linear-gradient(135deg, #f59e0b, #ea580c);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    /* Weather icons */
+    .weather-option {
+      cursor: pointer;
+      padding: 6px 10px;
+      border-radius: 8px;
+      border: 2px solid #e2e8f0;
+      transition: all 0.2s;
+      text-align: center;
+      font-size: 12px;
+    }
+    .weather-option:hover { border-color: #f59e0b; background: #fffbeb; }
+    .weather-option.active { border-color: #f59e0b; background: #fffbeb; }
+
+    /* Day selector */
+    .day-btn {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      border: 2px solid #e2e8f0;
+      background: white;
+      transition: all 0.2s;
+    }
+    .day-btn:hover { border-color: #f59e0b; background: #fffbeb; }
+    .day-btn.active { border-color: #f59e0b; background: #f59e0b; color: white; }
+
+    /* Animation speed indicator */
+    .speed-indicator {
+      display: flex;
+      gap: 3px;
+      align-items: center;
+    }
+    .speed-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #cbd5e1;
+      transition: background 0.2s;
+    }
+    .speed-dot.active { background: #f59e0b; }
+
+    /* Summary stat card */
+    .stat-mini {
+      background: #f8fafc;
+      border-radius: 10px;
+      padding: 10px 12px;
+      text-align: center;
+    }
+
+    /* Scrollable hotspot list */
+    .hotspot-list {
+      max-height: 320px;
+      overflow-y: auto;
+    }
+    .hotspot-list::-webkit-scrollbar { width: 3px; }
+    .hotspot-list::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 2px; }
+
+    /* Collapse header */
+    .collapse-header {
+      cursor: pointer;
+      user-select: none;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .collapse-header:hover { color: #d97706; }
+    .collapse-icon {
+      transition: transform 0.3s;
+      font-size: 12px;
+    }
+    .collapse-icon.open { transform: rotate(180deg); }
+
+    /* Responsive: hide panels on small screens */
+    @media (max-width: 1200px) {
+      .control-panel { width: 300px; }
+      .info-panel { width: 320px; }
+    }
+    @media (max-width: 900px) {
+      .control-panel { width: 280px; left: 8px; }
+      .info-panel { display: none; }
+    }
+    @media (max-width: 640px) {
+      .control-panel { width: calc(100% - 16px); left: 8px; max-height: 50vh; bottom: 8px; top: auto; border-radius: 12px; }
+    }
+  </style>
+</head>
+<body class="bg-gray-100">
+
+  <!-- Header -->
+  <div id="app-header"></div>
+
+  <!-- Map Container (full viewport) -->
+  <div style="position: fixed; top: 64px; left: 0; right: 0; bottom: 0; z-index: 0;">
+    <div id="heatmap-map"></div>
+  </div>
+
+  <!-- Left Control Panel -->
+  <div class="control-panel" id="controlPanel">
+
+    <!-- Panel Header -->
+    <div class="panel-section" style="background: linear-gradient(135deg, #fffbeb, #fef3c7); border-radius: 16px 16px 0 0;">
+      <div class="flex items-center gap-2 mb-1">
+        <div class="w-7 h-7 bg-amber-500 rounded-lg flex items-center justify-center text-sm">&#x1F525;</div>
+        <h2 class="font-bold text-gray-900 text-base">수요 히트맵 분석</h2>
+      </div>
+      <p class="text-xs text-gray-500">시간/요일/날씨별 택시 수요 예측</p>
+    </div>
+
+    <!-- Time Control -->
+    <div class="panel-section">
+      <div class="collapse-header" onclick="toggleSection('timeSection')">
+        <span class="font-semibold text-sm text-gray-800">&#x23F0; 시간 설정</span>
+        <span class="collapse-icon open" id="timeSection-icon">&#x25BC;</span>
+      </div>
+      <div id="timeSection" class="mt-3">
+        <!-- Current Time Display -->
+        <div class="flex items-center justify-between mb-3">
+          <div>
+            <div class="time-display" id="currentTimeDisplay">18:00</div>
+            <div class="text-xs text-gray-500 mt-1" id="timePeriodLabel">저녁 퇴근 시간대</div>
+          </div>
+          <div class="flex items-center gap-2">
+            <button class="play-btn paused" id="playBtn" onclick="toggleAnimation()" title="자동 재생">
+              <span id="playIcon">&#x25B6;</span>
+            </button>
+            <div class="flex flex-col items-center gap-1">
+              <button class="text-xs text-gray-400 hover:text-amber-600 transition" onclick="changeSpeed()" title="속도 변경" id="speedLabel">1x</button>
+              <div class="speed-indicator" id="speedDots">
+                <div class="speed-dot active"></div>
+                <div class="speed-dot"></div>
+                <div class="speed-dot"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Time Slider -->
+        <div class="relative">
+          <input type="range" min="0" max="23" value="18" class="time-slider w-full" id="timeSlider" oninput="onTimeChange(this.value)">
+          <div class="flex justify-between mt-1">
+            <span class="text-[10px] text-gray-400">0시</span>
+            <span class="text-[10px] text-gray-400">6시</span>
+            <span class="text-[10px] text-gray-400">12시</span>
+            <span class="text-[10px] text-gray-400">18시</span>
+            <span class="text-[10px] text-gray-400">23시</span>
+          </div>
+        </div>
+
+        <!-- Time Quick Buttons -->
+        <div class="flex gap-1 mt-2 flex-wrap">
+          <button class="text-[10px] px-2 py-1 rounded-full border border-gray-200 hover:border-amber-400 hover:bg-amber-50 transition" onclick="setTime(7)">&#x1F305; 출근</button>
+          <button class="text-[10px] px-2 py-1 rounded-full border border-gray-200 hover:border-amber-400 hover:bg-amber-50 transition" onclick="setTime(12)">&#x2600; 점심</button>
+          <button class="text-[10px] px-2 py-1 rounded-full border border-gray-200 hover:border-amber-400 hover:bg-amber-50 transition" onclick="setTime(18)">&#x1F307; 퇴근</button>
+          <button class="text-[10px] px-2 py-1 rounded-full border border-gray-200 hover:border-amber-400 hover:bg-amber-50 transition" onclick="setTime(22)">&#x1F303; 심야</button>
+          <button class="text-[10px] px-2 py-1 rounded-full border border-gray-200 hover:border-amber-400 hover:bg-amber-50 transition" onclick="setTime(2)">&#x1F319; 새벽</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Day of Week -->
+    <div class="panel-section">
+      <div class="collapse-header" onclick="toggleSection('daySection')">
+        <span class="font-semibold text-sm text-gray-800">&#x1F4C5; 요일 선택</span>
+        <span class="collapse-icon open" id="daySection-icon">&#x25BC;</span>
+      </div>
+      <div id="daySection" class="mt-3">
+        <div class="flex items-center justify-between">
+          <div class="day-btn" data-day="1" onclick="setDay(1)">월</div>
+          <div class="day-btn" data-day="2" onclick="setDay(2)">화</div>
+          <div class="day-btn" data-day="3" onclick="setDay(3)">수</div>
+          <div class="day-btn" data-day="4" onclick="setDay(4)">목</div>
+          <div class="day-btn active" data-day="5" onclick="setDay(5)">금</div>
+          <div class="day-btn" data-day="6" onclick="setDay(6)">토</div>
+          <div class="day-btn" data-day="0" onclick="setDay(0)">일</div>
+        </div>
+        <div class="text-xs text-gray-500 text-center mt-2" id="dayWeightLabel">금요일 (수요 가중치: x1.15)</div>
+      </div>
+    </div>
+
+    <!-- Weather -->
+    <div class="panel-section">
+      <div class="collapse-header" onclick="toggleSection('weatherSection')">
+        <span class="font-semibold text-sm text-gray-800">&#x26C5; 날씨 조건</span>
+        <span class="collapse-icon open" id="weatherSection-icon">&#x25BC;</span>
+      </div>
+      <div id="weatherSection" class="mt-3">
+        <div class="grid grid-cols-5 gap-2">
+          <div class="weather-option active" data-weather="clear" onclick="setWeather('clear')">
+            <div class="text-lg">&#x2600;&#xFE0F;</div>
+            <div class="text-[10px] mt-0.5">맑음</div>
+          </div>
+          <div class="weather-option" data-weather="cloudy" onclick="setWeather('cloudy')">
+            <div class="text-lg">&#x26C5;</div>
+            <div class="text-[10px] mt-0.5">흐림</div>
+          </div>
+          <div class="weather-option" data-weather="rain" onclick="setWeather('rain')">
+            <div class="text-lg">&#x1F327;&#xFE0F;</div>
+            <div class="text-[10px] mt-0.5">비</div>
+          </div>
+          <div class="weather-option" data-weather="heavy_rain" onclick="setWeather('heavy_rain')">
+            <div class="text-lg">&#x26C8;&#xFE0F;</div>
+            <div class="text-[10px] mt-0.5">폭우</div>
+          </div>
+          <div class="weather-option" data-weather="snow" onclick="setWeather('snow')">
+            <div class="text-lg">&#x2744;&#xFE0F;</div>
+            <div class="text-[10px] mt-0.5">눈</div>
+          </div>
+        </div>
+        <div class="text-xs text-gray-500 text-center mt-2" id="weatherWeightLabel">맑음 (수요 가중치: x1.00)</div>
+      </div>
+    </div>
+
+    <!-- District Filter -->
+    <div class="panel-section">
+      <div class="collapse-header" onclick="toggleSection('districtSection')">
+        <span class="font-semibold text-sm text-gray-800">&#x1F4CD; 지역 필터</span>
+        <span class="collapse-icon open" id="districtSection-icon">&#x25BC;</span>
+      </div>
+      <div id="districtSection" class="mt-3">
+        <select id="districtFilter" class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-200 bg-white" onchange="onDistrictChange(this.value)">
+          <option value="all">서울 전체 (25개 구)</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Hotspot Type Filter -->
+    <div class="panel-section">
+      <div class="collapse-header" onclick="toggleSection('typeSection')">
+        <span class="font-semibold text-sm text-gray-800">&#x1F3F7; 핫스팟 유형</span>
+        <span class="collapse-icon open" id="typeSection-icon">&#x25BC;</span>
+      </div>
+      <div id="typeSection" class="mt-3">
+        <div class="flex flex-wrap gap-1.5" id="typeFilters">
+          <!-- Generated by JS -->
+        </div>
+      </div>
+    </div>
+
+    <!-- Map Options -->
+    <div class="panel-section">
+      <div class="collapse-header" onclick="toggleSection('optionsSection')">
+        <span class="font-semibold text-sm text-gray-800">&#x2699;&#xFE0F; 표시 옵션</span>
+        <span class="collapse-icon" id="optionsSection-icon">&#x25BC;</span>
+      </div>
+      <div id="optionsSection" class="mt-3" style="display:none;">
+        <label class="flex items-center gap-2 mb-2 cursor-pointer">
+          <input type="checkbox" id="showHeatmap" checked class="w-4 h-4 text-amber-500 rounded" onchange="toggleLayer('heatmap')">
+          <span class="text-sm text-gray-700">히트맵 표시</span>
+        </label>
+        <label class="flex items-center gap-2 mb-2 cursor-pointer">
+          <input type="checkbox" id="showMarkers" checked class="w-4 h-4 text-amber-500 rounded" onchange="toggleLayer('markers')">
+          <span class="text-sm text-gray-700">핫스팟 마커 표시</span>
+        </label>
+        <label class="flex items-center gap-2 mb-2 cursor-pointer">
+          <input type="checkbox" id="showLabels" class="w-4 h-4 text-amber-500 rounded" onchange="toggleLayer('labels')">
+          <span class="text-sm text-gray-700">지명 라벨 표시</span>
+        </label>
+        <div class="mt-2">
+          <label class="text-xs text-gray-600 mb-1 block">히트맵 반경</label>
+          <input type="range" min="10" max="50" value="25" class="w-full" id="heatRadius" oninput="changeHeatRadius(this.value)">
+          <div class="flex justify-between text-[10px] text-gray-400">
+            <span>좁게</span><span>넓게</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Right Info Panel -->
+  <div class="info-panel" id="infoPanel">
+
+    <!-- Summary Header -->
+    <div class="panel-section" style="background: linear-gradient(135deg, #f0fdf4, #ecfdf5); border-radius: 16px 16px 0 0;">
+      <div class="flex items-center gap-2 mb-2">
+        <div class="w-7 h-7 bg-emerald-500 rounded-lg flex items-center justify-center text-sm text-white">&#x1F4CA;</div>
+        <h2 class="font-bold text-gray-900 text-base">실시간 수요 분석</h2>
+      </div>
+      <!-- Condition Summary -->
+      <div class="flex items-center gap-3 text-xs text-gray-600">
+        <span id="summaryTime">&#x23F0; 18:00</span>
+        <span id="summaryDay">&#x1F4C5; 금요일</span>
+        <span id="summaryWeather">&#x2600;&#xFE0F; 맑음</span>
+      </div>
+      <!-- Quick Stats -->
+      <div class="grid grid-cols-3 gap-2 mt-3">
+        <div class="stat-mini">
+          <div class="text-lg font-extrabold text-amber-600" id="statAvgScore">0</div>
+          <div class="text-[10px] text-gray-500">평균 수요</div>
+        </div>
+        <div class="stat-mini">
+          <div class="text-lg font-extrabold text-red-600" id="statTopScore">0</div>
+          <div class="text-[10px] text-gray-500">최고 수요</div>
+        </div>
+        <div class="stat-mini">
+          <div class="text-lg font-extrabold text-blue-600" id="statActiveSpots">0</div>
+          <div class="text-[10px] text-gray-500">활성 핫스팟</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Top 10 Hotspots -->
+    <div class="panel-section">
+      <div class="collapse-header" onclick="toggleSection('hotspotsSection')">
+        <span class="font-semibold text-sm text-gray-800">&#x1F51D; Top 10 핫스팟</span>
+        <span class="collapse-icon open" id="hotspotsSection-icon">&#x25BC;</span>
+      </div>
+      <div id="hotspotsSection" class="mt-2">
+        <div class="hotspot-list" id="hotspotList">
+          <!-- Generated by JS -->
+        </div>
+      </div>
+    </div>
+
+    <!-- District Ranking -->
+    <div class="panel-section">
+      <div class="collapse-header" onclick="toggleSection('districtRankSection')">
+        <span class="font-semibold text-sm text-gray-800">&#x1F3D8; 구별 수요 랭킹</span>
+        <span class="collapse-icon open" id="districtRankSection-icon">&#x25BC;</span>
+      </div>
+      <div id="districtRankSection" class="mt-2">
+        <div id="districtRankList">
+          <!-- Generated by JS -->
+        </div>
+      </div>
+    </div>
+
+    <!-- 24-hour Demand Chart -->
+    <div class="panel-section">
+      <div class="collapse-header" onclick="toggleSection('chartSection')">
+        <span class="font-semibold text-sm text-gray-800">&#x1F4C8; 24시간 수요 패턴</span>
+        <span class="collapse-icon open" id="chartSection-icon">&#x25BC;</span>
+      </div>
+      <div id="chartSection" class="mt-3">
+        <div class="bar-chart-container" id="demandChart">
+          <!-- Generated by JS -->
+        </div>
+        <div class="flex justify-between mt-1" id="chartLabels">
+          <!-- Generated by JS -->
+        </div>
+        <div class="flex items-center justify-center gap-4 mt-2 text-[10px] text-gray-500">
+          <span><span class="inline-block w-2 h-2 rounded-full bg-red-500 mr-1"></span>높음</span>
+          <span><span class="inline-block w-2 h-2 rounded-full bg-orange-400 mr-1"></span>보통</span>
+          <span><span class="inline-block w-2 h-2 rounded-full bg-yellow-400 mr-1"></span>낮음</span>
+          <span><span class="inline-block w-2 h-2 rounded-full bg-green-400 mr-1"></span>최저</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Map Legend (bottom-left) -->
+  <div style="position:absolute; bottom:24px; left:50%; transform:translateX(-50%); z-index:1000;" id="mapLegend">
+    <div class="heatmap-legend flex items-center gap-3">
+      <span class="text-xs font-semibold text-gray-600">수요</span>
+      <span class="text-[10px] text-green-600">낮음</span>
+      <div class="heatmap-legend-bar"></div>
+      <span class="text-[10px] text-red-600">높음</span>
+      <span class="text-[10px] text-gray-400 ml-2" id="legendTimestamp"></span>
+    </div>
+  </div>
+
+  <!-- Panel Toggle Buttons -->
+  <button class="panel-toggle panel-toggle-left" id="toggleLeft" onclick="togglePanel('left')" title="패널 접기/펼치기">
+    <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor"><path d="M8 1L3 6l5 5" stroke="currentColor" stroke-width="2" fill="none"/></svg>
+  </button>
+  <button class="panel-toggle panel-toggle-right" id="toggleRight" onclick="togglePanel('right')" title="패널 접기/펼치기">
+    <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor"><path d="M4 1l5 5-5 5" stroke="currentColor" stroke-width="2" fill="none"/></svg>
+  </button>
+
+  <!-- Footer (hidden on map page, accessible via scroll or other pages) -->
+  <div id="app-footer" style="display:none;"></div>
+
+  <!-- Scripts -->
+  <script src="js/mock-data.js"></script>
+  <script src="js/shared.js"></script>
+  <script src="js/map-engine.js"></script>
+  <script src="js/demand-engine.js"></script>
+
+  <script>
+  /* ═══════════════════════════════════════════
+     히트맵 페이지 메인 로직
+     ═══════════════════════════════════════════ */
+
+  // ── 전역 상태 ──
+  var state = {
+    hour: 18,
+    dayOfWeek: 5,       // 금요일
+    weather: 'clear',
+    district: 'all',
+    types: ['교통','업무','상업','유흥','관광','시장','주거','문화'],
+    allTypes: ['교통','업무','상업','유흥','관광','시장','주거','문화'],
+    isPlaying: false,
+    animationTimer: null,
+    animationSpeed: 1,   // 1=1s, 2=0.5s, 3=0.25s
+    showHeatmap: true,
+    showMarkers: true,
+    showLabels: false,
+    heatRadius: 25
+  };
+
+  var map = null;
+  var heatLayer = null;
+  var markerGroup = null;
+  var labelGroup = null;
+
+  // ── 초기화 ──
+  document.addEventListener('DOMContentLoaded', function() {
+    initPage('heatmap');
+    initMapView();
+    initDistrictDropdown();
+    initTypeFilters();
+    updateAll();
+    updateLegendTime();
+  });
+
+  // ── 지도 초기화 ──
+  function initMapView() {
+    map = initMap('heatmap-map', [37.5550, 126.9800], 12);
+    markerGroup = L.layerGroup().addTo(map);
+    labelGroup = L.layerGroup().addTo(map);
+
+    // 지도 클릭 시 팝업 닫기
+    map.on('click', function() {
+      map.closePopup();
+    });
+  }
+
+  // ── 구 드롭다운 초기화 ──
+  function initDistrictDropdown() {
+    var sel = document.getElementById('districtFilter');
+    SEOUL_DISTRICTS.forEach(function(d) {
+      var opt = document.createElement('option');
+      opt.value = d.name;
+      opt.textContent = d.name;
+      sel.appendChild(opt);
+    });
+  }
+
+  // ── 핫스팟 유형 필터 초기화 ──
+  function initTypeFilters() {
+    var container = document.getElementById('typeFilters');
+    var typeIcons = {
+      '교통': '&#x1F689;',
+      '업무': '&#x1F3E2;',
+      '상업': '&#x1F6CD;',
+      '유흥': '&#x1F37B;',
+      '관광': '&#x1F4F8;',
+      '시장': '&#x1F34E;',
+      '주거': '&#x1F3E0;',
+      '문화': '&#x1F3AD;'
+    };
+
+    // "전체" 버튼
+    var allBtn = document.createElement('button');
+    allBtn.className = 'text-[11px] px-2.5 py-1.5 rounded-full border-2 border-amber-400 bg-amber-50 text-amber-700 font-semibold transition';
+    allBtn.id = 'typeAll';
+    allBtn.innerHTML = '전체';
+    allBtn.onclick = function() { toggleAllTypes(); };
+    container.appendChild(allBtn);
+
+    state.allTypes.forEach(function(type) {
+      var btn = document.createElement('button');
+      btn.className = 'type-filter-btn text-[11px] px-2.5 py-1.5 rounded-full border-2 border-amber-400 bg-amber-50 text-amber-700 font-medium transition';
+      btn.dataset.type = type;
+      btn.innerHTML = typeIcons[type] + ' ' + type;
+      btn.onclick = function() { toggleType(type); };
+      container.appendChild(btn);
+    });
+  }
+
+  // ── 전체 업데이트 ──
+  function updateAll() {
+    updateHeatmap();
+    updateMarkers();
+    updateLabels();
+    updateTopHotspots();
+    updateDistrictRanking();
+    update24HourChart();
+    updateSummary();
+    updateTimeDisplay();
+  }
+
+  // ── 히트맵 업데이트 ──
+  function updateHeatmap() {
+    if (heatLayer) {
+      map.removeLayer(heatLayer);
+      heatLayer = null;
+    }
+    if (!state.showHeatmap) return;
+
+    var filtered = getFilteredHotspots();
+    var points = [];
+
+    filtered.forEach(function(hs) {
+      var score = calculateDemandScore(hs, state.hour, state.dayOfWeek, state.weather);
+      var intensity = score / 100;
+      points.push([hs.lat, hs.lng, intensity]);
+
+      // 보조 포인트 (수요 높을수록 많이)
+      var numSub = Math.floor(score / 18);
+      for (var i = 0; i < numSub; i++) {
+        var angle = (i / numSub) * 2 * Math.PI + (Math.random() * 0.5);
+        var dist = 0.002 + Math.random() * 0.005;
+        points.push([
+          hs.lat + Math.cos(angle) * dist,
+          hs.lng + Math.sin(angle) * dist,
+          intensity * (0.25 + Math.random() * 0.45)
+        ]);
+      }
+    });
+
+    if (points.length > 0) {
+      heatLayer = addHeatLayer(map, points, { radius: state.heatRadius, blur: 18, maxZoom: 17 });
+    }
+  }
+
+  // ── 마커 업데이트 ──
+  function updateMarkers() {
+    markerGroup.clearLayers();
+    if (!state.showMarkers) return;
+
+    var filtered = getFilteredHotspots();
+    filtered.forEach(function(hs) {
+      var score = calculateDemandScore(hs, state.hour, state.dayOfWeek, state.weather);
+      if (score < 15) return; // 수요 너무 낮으면 표시하지 않음
+      addHotspotMarkerToGroup(hs, score);
+    });
+  }
+
+  function addHotspotMarkerToGroup(hotspot, score) {
+    var grade = getDemandGrade(score);
+    var bgColor = score >= 80 ? '#dc2626' : score >= 65 ? '#ea580c' : score >= 50 ? '#eab308' : score >= 35 ? '#22c55e' : '#94a3b8';
+    var size = score >= 80 ? 30 : score >= 65 ? 26 : score >= 50 ? 24 : 20;
+
+    var icon = L.divIcon({
+      className: 'custom-div-icon',
+      html: '<div style="background:' + bgColor + ';color:white;border-radius:50%;width:' + size + 'px;height:' + size + 'px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:' + (size > 26 ? 12 : 10) + 'px;border:2px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.3);font-family:Pretendard Variable,sans-serif;transition:transform 0.2s;cursor:pointer;" onmouseover="this.style.transform=\'scale(1.3)\'" onmouseout="this.style.transform=\'scale(1)\'">' + score + '</div>',
+      iconSize: [size, size],
+      iconAnchor: [size / 2, size / 2],
+      popupAnchor: [0, -size / 2 - 4]
+    });
+
+    var popup = '<div style="min-width:200px">' +
+      '<div class="flex items-center gap-2 mb-1">' +
+      '<span class="type-' + hotspot.type + ' text-[10px] px-1.5 py-0.5 rounded-full font-medium">' + hotspot.type + '</span>' +
+      '<span class="text-[10px] text-gray-400">' + hotspot.district + '</span>' +
+      '</div>' +
+      '<p class="font-bold text-sm text-gray-900">' + hotspot.name + '</p>' +
+      '<div class="mt-2 space-y-1 text-xs">' +
+      '<div class="flex justify-between"><span class="text-gray-500">수요 점수</span><span class="font-bold ' + getScoreColor(score) + '">' + score + ' (' + grade.label + ')</span></div>' +
+      '<div class="flex justify-between"><span class="text-gray-500">평균 대기</span><span class="font-semibold">' + hotspot.avgWait + '분</span></div>' +
+      '<div class="flex justify-between"><span class="text-gray-500">평균 요금</span><span class="font-semibold">' + fmt(hotspot.avgFare) + '원</span></div>' +
+      '<div class="flex justify-between"><span class="text-gray-500">피크 시간</span><span class="font-semibold">' + hotspot.peakHour + '</span></div>' +
+      '<div class="flex justify-between"><span class="text-gray-500">일 승객</span><span class="font-semibold">' + fmt(hotspot.dailyPassengers) + '명</span></div>' +
+      '</div>' +
+      '<div class="mt-2 pt-2 border-t border-gray-100">' +
+      '<div class="score-bar"><div class="score-bar-fill ' + getScoreBarColor(score) + '" style="width:' + score + '%"></div></div>' +
+      '</div></div>';
+
+    var marker = L.marker([hotspot.lat, hotspot.lng], { icon: icon });
+    marker.bindPopup(popup, { maxWidth: 280, className: 'custom-popup' });
+    markerGroup.addLayer(marker);
+  }
+
+  // ── 라벨 업데이트 ──
+  function updateLabels() {
+    labelGroup.clearLayers();
+    if (!state.showLabels) return;
+
+    var filtered = getFilteredHotspots();
+    filtered.forEach(function(hs) {
+      var score = calculateDemandScore(hs, state.hour, state.dayOfWeek, state.weather);
+      if (score < 25) return;
+      var labelIcon = L.divIcon({
+        className: 'custom-div-icon',
+        html: '<div style="background:rgba(255,255,255,0.9);padding:2px 6px;border-radius:4px;font-size:10px;font-weight:600;white-space:nowrap;box-shadow:0 1px 4px rgba(0,0,0,0.15);font-family:Pretendard Variable,sans-serif;color:#374151;">' + hs.name + '</div>',
+        iconSize: null,
+        iconAnchor: [0, -16]
+      });
+      labelGroup.addLayer(L.marker([hs.lat, hs.lng], { icon: labelIcon, interactive: false }));
+    });
+  }
+
+  // ── 필터된 핫스팟 가져오기 ──
+  function getFilteredHotspots() {
+    var filtered = HOTSPOTS;
+
+    // 구 필터
+    if (state.district !== 'all') {
+      filtered = filtered.filter(function(hs) {
+        return hs.district === state.district;
+      });
+    }
+
+    // 유형 필터
+    if (state.types.length < state.allTypes.length) {
+      filtered = filtered.filter(function(hs) {
+        return state.types.indexOf(hs.type) !== -1;
+      });
+    }
+
+    return filtered;
+  }
+
+  // ── Top 10 핫스팟 업데이트 ──
+  function updateTopHotspots() {
+    var filtered = getFilteredHotspots();
+    var scored = filtered.map(function(hs) {
+      return {
+        hotspot: hs,
+        score: calculateDemandScore(hs, state.hour, state.dayOfWeek, state.weather)
+      };
+    });
+    scored.sort(function(a, b) { return b.score - a.score; });
+
+    var top10 = scored.slice(0, 10);
+    var html = '';
+
+    top10.forEach(function(item, idx) {
+      var hs = item.hotspot;
+      var score = item.score;
+      var grade = getDemandGrade(score);
+      var rankColor = idx === 0 ? 'bg-red-500 text-white' : idx === 1 ? 'bg-orange-500 text-white' : idx === 2 ? 'bg-amber-500 text-white' : 'bg-gray-200 text-gray-700';
+      var barColor = score >= 80 ? 'bg-red-500' : score >= 65 ? 'bg-orange-400' : score >= 50 ? 'bg-yellow-400' : 'bg-green-400';
+
+      html += '<div class="hotspot-item flex items-center gap-2.5 py-2 px-1 rounded-lg" onclick="focusHotspot(' + hs.lat + ',' + hs.lng + ',' + hs.id + ')">' +
+        '<div class="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 ' + rankColor + '">' + (idx + 1) + '</div>' +
+        '<div class="flex-1 min-w-0">' +
+        '<div class="flex items-center gap-1.5">' +
+        '<span class="text-xs font-semibold text-gray-900 truncate">' + hs.name + '</span>' +
+        '<span class="type-' + hs.type + ' text-[9px] px-1.5 py-0.5 rounded-full shrink-0">' + hs.type + '</span>' +
+        '</div>' +
+        '<div class="flex items-center gap-2 mt-0.5">' +
+        '<div class="flex-1 h-1.5 rounded bg-gray-100 overflow-hidden">' +
+        '<div class="h-full rounded ' + barColor + '" style="width:' + score + '%;transition:width 0.5s"></div>' +
+        '</div>' +
+        '<span class="text-[10px] text-gray-400">' + hs.district + '</span>' +
+        '</div>' +
+        '</div>' +
+        '<div class="text-right shrink-0">' +
+        '<div class="text-sm font-bold ' + getScoreColor(score) + '">' + score + '</div>' +
+        '<div class="text-[9px] text-gray-400">' + grade.label + '</div>' +
+        '</div>' +
+        '</div>';
+    });
+
+    if (top10.length === 0) {
+      html = '<div class="text-center text-sm text-gray-400 py-6">필터 조건에 맞는 핫스팟이 없습니다.</div>';
+    }
+
+    document.getElementById('hotspotList').innerHTML = html;
+  }
+
+  // ── 구별 수요 랭킹 업데이트 ──
+  function updateDistrictRanking() {
+    var districts = aggregateDistrictDemand(state.hour, state.dayOfWeek, state.weather);
+
+    // 선택된 구 필터 적용
+    if (state.district !== 'all') {
+      districts = districts.filter(function(d) { return d.name === state.district; });
+    }
+
+    var top = districts.slice(0, 8);
+    var maxScore = top.length > 0 ? top[0].avgScore : 100;
+    var html = '';
+
+    top.forEach(function(d, idx) {
+      var barPct = Math.round((d.avgScore / maxScore) * 100);
+      var barColor = d.avgScore >= 80 ? 'bg-red-500' : d.avgScore >= 65 ? 'bg-orange-400' : d.avgScore >= 50 ? 'bg-yellow-400' : 'bg-green-400';
+
+      html += '<div class="flex items-center gap-2 py-1.5">' +
+        '<span class="text-[10px] text-gray-400 w-4 text-right">' + (idx + 1) + '</span>' +
+        '<span class="text-xs font-medium text-gray-800 w-16 shrink-0">' + d.name + '</span>' +
+        '<div class="flex-1 district-bar">' +
+        '<div class="district-bar-fill ' + barColor + '" style="width:' + barPct + '%"></div>' +
+        '</div>' +
+        '<span class="text-xs font-bold ' + getScoreColor(d.avgScore) + ' w-8 text-right">' + d.avgScore + '</span>' +
+        '</div>';
+    });
+
+    document.getElementById('districtRankList').innerHTML = html;
+  }
+
+  // ── 24시간 수요 차트 업데이트 ──
+  function update24HourChart() {
+    var chartEl = document.getElementById('demandChart');
+    var labelsEl = document.getElementById('chartLabels');
+    var html = '';
+    var labelHtml = '';
+
+    // 모든 핫스팟 평균 수요 계산
+    var hourlyScores = [];
+    for (var h = 0; h < 24; h++) {
+      var filtered = getFilteredHotspots();
+      var total = 0;
+      filtered.forEach(function(hs) {
+        total += calculateDemandScore(hs, h, state.dayOfWeek, state.weather);
+      });
+      var avg = filtered.length > 0 ? Math.round(total / filtered.length) : 0;
+      hourlyScores.push(avg);
+    }
+
+    var maxVal = Math.max.apply(null, hourlyScores);
+    if (maxVal === 0) maxVal = 1;
+
+    for (var h = 0; h < 24; h++) {
+      var score = hourlyScores[h];
+      var heightPct = Math.round((score / maxVal) * 100);
+      var barColor = score >= 70 ? '#ef4444' : score >= 55 ? '#f97316' : score >= 40 ? '#eab308' : '#22c55e';
+      var isActive = h === state.hour;
+
+      html += '<div class="bar-col' + (isActive ? ' active' : '') + '" ' +
+        'style="height:' + Math.max(heightPct, 4) + '%;background:' + barColor + ';opacity:' + (isActive ? '1' : '0.7') + ';" ' +
+        'onclick="setTime(' + h + ')" ' +
+        'title="' + formatHour(h) + ' : 수요 ' + score + '"></div>';
+
+      // 매 3시간마다 라벨
+      if (h % 3 === 0) {
+        labelHtml += '<span class="text-[9px] text-gray-400" style="flex:3;">' + h + '시</span>';
+      }
+    }
+
+    chartEl.innerHTML = html;
+    labelsEl.innerHTML = labelHtml;
+  }
+
+  // ── 요약 정보 업데이트 ──
+  function updateSummary() {
+    var dayNames = ['일', '월', '화', '수', '목', '금', '토'];
+    var weatherNames = {
+      'clear': '&#x2600;&#xFE0F; 맑음',
+      'cloudy': '&#x26C5; 흐림',
+      'rain': '&#x1F327;&#xFE0F; 비',
+      'heavy_rain': '&#x26C8;&#xFE0F; 폭우',
+      'snow': '&#x2744;&#xFE0F; 눈'
+    };
+
+    document.getElementById('summaryTime').innerHTML = '&#x23F0; ' + formatHour(state.hour);
+    document.getElementById('summaryDay').innerHTML = '&#x1F4C5; ' + dayNames[state.dayOfWeek] + '요일';
+    document.getElementById('summaryWeather').innerHTML = weatherNames[state.weather] || state.weather;
+
+    // 통계
+    var filtered = getFilteredHotspots();
+    var totalScore = 0;
+    var topScore = 0;
+    var activeCount = 0;
+
+    filtered.forEach(function(hs) {
+      var score = calculateDemandScore(hs, state.hour, state.dayOfWeek, state.weather);
+      totalScore += score;
+      if (score > topScore) topScore = score;
+      if (score >= 40) activeCount++;
+    });
+
+    var avgScore = filtered.length > 0 ? Math.round(totalScore / filtered.length) : 0;
+
+    animateNumber('statAvgScore', avgScore);
+    animateNumber('statTopScore', topScore);
+    animateNumber('statActiveSpots', activeCount);
+  }
+
+  // ── 숫자 애니메이션 ──
+  function animateNumber(elementId, target) {
+    var el = document.getElementById(elementId);
+    var current = parseInt(el.textContent) || 0;
+    if (current === target) return;
+
+    var diff = target - current;
+    var steps = 15;
+    var stepVal = diff / steps;
+    var step = 0;
+
+    function tick() {
+      step++;
+      if (step >= steps) {
+        el.textContent = target;
+        return;
+      }
+      el.textContent = Math.round(current + stepVal * step);
+      requestAnimationFrame(tick);
+    }
+    requestAnimationFrame(tick);
+  }
+
+  // ── 시간 디스플레이 업데이트 ──
+  function updateTimeDisplay() {
+    document.getElementById('currentTimeDisplay').textContent = formatHour(state.hour);
+
+    var periods = {
+      0: '심야 시간대', 1: '심야 시간대', 2: '심야 시간대', 3: '심야 시간대',
+      4: '새벽 시간대', 5: '새벽 시간대',
+      6: '이른 아침', 7: '출근 시간대', 8: '출근 시간대', 9: '오전 시간대',
+      10: '오전 시간대', 11: '오전 시간대',
+      12: '점심 시간대', 13: '오후 시간대', 14: '오후 시간대',
+      15: '오후 시간대', 16: '오후 시간대',
+      17: '퇴근 시간대', 18: '저녁 퇴근 시간대', 19: '저녁 시간대',
+      20: '저녁 시간대', 21: '밤 시간대', 22: '밤 시간대', 23: '심야 시간대'
+    };
+    document.getElementById('timePeriodLabel').textContent = periods[state.hour] || '';
+
+    // 슬라이더 동기화
+    document.getElementById('timeSlider').value = state.hour;
+  }
+
+  // ── 시간 변경 ──
+  function onTimeChange(val) {
+    state.hour = parseInt(val);
+    updateAll();
+  }
+
+  function setTime(h) {
+    state.hour = h;
+    document.getElementById('timeSlider').value = h;
+    updateAll();
+  }
+
+  // ── 요일 변경 ──
+  function setDay(d) {
+    state.dayOfWeek = d;
+
+    // UI 업데이트
+    document.querySelectorAll('.day-btn').forEach(function(btn) {
+      btn.classList.remove('active');
+      if (parseInt(btn.dataset.day) === d) btn.classList.add('active');
+    });
+
+    var dayNames = { 0: '일요일', 1: '월요일', 2: '화요일', 3: '수요일', 4: '목요일', 5: '금요일', 6: '토요일' };
+    document.getElementById('dayWeightLabel').textContent = dayNames[d] + ' (수요 가중치: x' + DAY_WEIGHTS[d].toFixed(2) + ')';
+
+    updateAll();
+  }
+
+  // ── 날씨 변경 ──
+  function setWeather(w) {
+    state.weather = w;
+
+    // UI 업데이트
+    document.querySelectorAll('.weather-option').forEach(function(opt) {
+      opt.classList.remove('active');
+      if (opt.dataset.weather === w) opt.classList.add('active');
+    });
+
+    var weatherLabels = {
+      'clear': '맑음', 'cloudy': '흐림', 'rain': '비', 'heavy_rain': '폭우', 'snow': '눈'
+    };
+    document.getElementById('weatherWeightLabel').textContent = weatherLabels[w] + ' (수요 가중치: x' + WEATHER_WEIGHTS[w].toFixed(2) + ')';
+
+    updateAll();
+  }
+
+  // ── 구 필터 변경 ──
+  function onDistrictChange(val) {
+    state.district = val;
+
+    if (val !== 'all') {
+      var dist = SEOUL_DISTRICTS.find(function(d) { return d.name === val; });
+      if (dist) {
+        map.setView([dist.lat, dist.lng], 14, { animate: true });
+      }
+    } else {
+      map.setView([37.5550, 126.9800], 12, { animate: true });
+    }
+
+    updateAll();
+  }
+
+  // ── 핫스팟 유형 토글 ──
+  function toggleType(type) {
+    var idx = state.types.indexOf(type);
+    if (idx !== -1) {
+      state.types.splice(idx, 1);
+    } else {
+      state.types.push(type);
+    }
+    updateTypeButtons();
+    updateAll();
+  }
+
+  function toggleAllTypes() {
+    if (state.types.length === state.allTypes.length) {
+      state.types = [];
+    } else {
+      state.types = state.allTypes.slice();
+    }
+    updateTypeButtons();
+    updateAll();
+  }
+
+  function updateTypeButtons() {
+    var allActive = state.types.length === state.allTypes.length;
+    var allBtn = document.getElementById('typeAll');
+    allBtn.className = 'text-[11px] px-2.5 py-1.5 rounded-full border-2 font-semibold transition ' +
+      (allActive ? 'border-amber-400 bg-amber-50 text-amber-700' : 'border-gray-200 bg-white text-gray-500');
+
+    document.querySelectorAll('.type-filter-btn').forEach(function(btn) {
+      var type = btn.dataset.type;
+      var isActive = state.types.indexOf(type) !== -1;
+      btn.className = 'type-filter-btn text-[11px] px-2.5 py-1.5 rounded-full border-2 font-medium transition ' +
+        (isActive ? 'border-amber-400 bg-amber-50 text-amber-700' : 'border-gray-200 bg-white text-gray-400');
+    });
+  }
+
+  // ── 레이어 토글 ──
+  function toggleLayer(layer) {
+    if (layer === 'heatmap') {
+      state.showHeatmap = document.getElementById('showHeatmap').checked;
+      updateHeatmap();
+    } else if (layer === 'markers') {
+      state.showMarkers = document.getElementById('showMarkers').checked;
+      updateMarkers();
+    } else if (layer === 'labels') {
+      state.showLabels = document.getElementById('showLabels').checked;
+      updateLabels();
+    }
+  }
+
+  // ── 히트맵 반경 변경 ──
+  function changeHeatRadius(val) {
+    state.heatRadius = parseInt(val);
+    updateHeatmap();
+  }
+
+  // ── 핫스팟 포커스 (클릭 시 이동) ──
+  function focusHotspot(lat, lng, id) {
+    map.setView([lat, lng], 15, { animate: true });
+
+    // 해당 마커 팝업 열기
+    markerGroup.eachLayer(function(layer) {
+      if (layer.getLatLng) {
+        var pos = layer.getLatLng();
+        if (Math.abs(pos.lat - lat) < 0.0001 && Math.abs(pos.lng - lng) < 0.0001) {
+          setTimeout(function() { layer.openPopup(); }, 400);
+        }
+      }
+    });
+  }
+
+  // ── 섹션 접기/펼치기 ──
+  function toggleSection(sectionId) {
+    var section = document.getElementById(sectionId);
+    var icon = document.getElementById(sectionId + '-icon');
+    if (section.style.display === 'none') {
+      section.style.display = '';
+      icon.classList.add('open');
+    } else {
+      section.style.display = 'none';
+      icon.classList.remove('open');
+    }
+  }
+
+  // ── 패널 토글 ──
+  var leftHidden = false;
+  var rightHidden = false;
+
+  function togglePanel(side) {
+    if (side === 'left') {
+      leftHidden = !leftHidden;
+      var panel = document.getElementById('controlPanel');
+      var toggle = document.getElementById('toggleLeft');
+      if (leftHidden) {
+        panel.style.transform = 'translateX(calc(-100% - 20px))';
+        toggle.style.left = '12px';
+        toggle.innerHTML = '<svg width="12" height="12" viewBox="0 0 12 12"><path d="M4 1l5 5-5 5" stroke="currentColor" stroke-width="2" fill="none"/></svg>';
+      } else {
+        panel.style.transform = '';
+        toggle.style.left = '358px';
+        toggle.innerHTML = '<svg width="12" height="12" viewBox="0 0 12 12"><path d="M8 1L3 6l5 5" stroke="currentColor" stroke-width="2" fill="none"/></svg>';
+      }
+    } else {
+      rightHidden = !rightHidden;
+      var panel = document.getElementById('infoPanel');
+      var toggle = document.getElementById('toggleRight');
+      if (rightHidden) {
+        panel.style.transform = 'translateX(calc(100% + 20px))';
+        toggle.style.right = '12px';
+        toggle.innerHTML = '<svg width="12" height="12" viewBox="0 0 12 12"><path d="M8 1L3 6l5 5" stroke="currentColor" stroke-width="2" fill="none"/></svg>';
+      } else {
+        panel.style.transform = '';
+        toggle.style.right = '378px';
+        toggle.innerHTML = '<svg width="12" height="12" viewBox="0 0 12 12"><path d="M4 1l5 5-5 5" stroke="currentColor" stroke-width="2" fill="none"/></svg>';
+      }
+    }
+  }
+
+  // ── 애니메이션 (자동 시간 재생) ──
+  function toggleAnimation() {
+    if (state.isPlaying) {
+      stopAnimation();
+    } else {
+      startAnimation();
+    }
+  }
+
+  function startAnimation() {
+    state.isPlaying = true;
+    var btn = document.getElementById('playBtn');
+    btn.classList.remove('paused');
+    btn.classList.add('playing');
+    document.getElementById('playIcon').innerHTML = '&#x23F8;';
+
+    var intervals = { 1: 1000, 2: 500, 3: 250 };
+    var interval = intervals[state.animationSpeed] || 1000;
+
+    state.animationTimer = setInterval(function() {
+      state.hour = (state.hour + 1) % 24;
+      updateAll();
+    }, interval);
+  }
+
+  function stopAnimation() {
+    state.isPlaying = false;
+    var btn = document.getElementById('playBtn');
+    btn.classList.remove('playing');
+    btn.classList.add('paused');
+    document.getElementById('playIcon').innerHTML = '&#x25B6;';
+
+    if (state.animationTimer) {
+      clearInterval(state.animationTimer);
+      state.animationTimer = null;
+    }
+  }
+
+  function changeSpeed() {
+    state.animationSpeed = (state.animationSpeed % 3) + 1;
+    var label = document.getElementById('speedLabel');
+    label.textContent = state.animationSpeed + 'x';
+
+    // 속도 점 업데이트
+    var dots = document.querySelectorAll('#speedDots .speed-dot');
+    dots.forEach(function(dot, i) {
+      dot.classList.toggle('active', i < state.animationSpeed);
+    });
+
+    // 재생 중이면 속도 적용
+    if (state.isPlaying) {
+      stopAnimation();
+      startAnimation();
+    }
+  }
+
+  // ── 범례 시간 갱신 ──
+  function updateLegendTime() {
+    setInterval(function() {
+      var now = new Date();
+      document.getElementById('legendTimestamp').textContent =
+        '갱신 ' + (now.getHours() < 10 ? '0' : '') + now.getHours() + ':' +
+        (now.getMinutes() < 10 ? '0' : '') + now.getMinutes() + ':' +
+        (now.getSeconds() < 10 ? '0' : '') + now.getSeconds();
+    }, 1000);
+  }
+
+  // ── 패널 transition 스타일 ──
+  (function() {
+    var cp = document.getElementById('controlPanel');
+    var ip = document.getElementById('infoPanel');
+    if (cp) cp.style.transition = 'transform 0.3s ease';
+    if (ip) ip.style.transition = 'transform 0.3s ease';
+  })();
+
+  // ── 키보드 단축키 ──
+  document.addEventListener('keydown', function(e) {
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+
+    switch(e.key) {
+      case 'ArrowRight':
+        e.preventDefault();
+        state.hour = (state.hour + 1) % 24;
+        updateAll();
+        break;
+      case 'ArrowLeft':
+        e.preventDefault();
+        state.hour = (state.hour - 1 + 24) % 24;
+        updateAll();
+        break;
+      case ' ':
+        e.preventDefault();
+        toggleAnimation();
+        break;
+      case '1': setTime(7); break;
+      case '2': setTime(12); break;
+      case '3': setTime(18); break;
+      case '4': setTime(22); break;
+    }
+  });
+
+  </script>
+</body>
+</html>
