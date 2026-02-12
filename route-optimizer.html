@@ -861,26 +861,6 @@
     document.getElementById('hotspotDetailList').innerHTML = html;
   }
 
-  /* ═══ 우선순위별 핫스팟 조정 ═══ */
-  function getAdjustedHotspots(priority, hour, day, weather) {
-    if (priority === 'demand') {
-      var scored = HOTSPOTS.map(function(hs) {
-        return { hs: hs, score: calculateDemandScore(hs, hour, day, weather) };
-      });
-      scored.sort(function(a, b) { return b.score - a.score; });
-      return scored.slice(0, Math.min(25, scored.length)).map(function(s) { return s.hs; });
-    } else if (priority === 'distance') {
-      if (!currentStartPos) return HOTSPOTS;
-      var withDist = HOTSPOTS.map(function(hs) {
-        var d = haversineDistance(currentStartPos.lat, currentStartPos.lng, hs.lat, hs.lng);
-        return { hs: hs, dist: d };
-      });
-      withDist.sort(function(a, b) { return a.dist - b.dist; });
-      return withDist.slice(0, Math.min(20, withDist.length)).map(function(s) { return s.hs; });
-    }
-    return HOTSPOTS;
-  }
-
   /* ── 로딩 텍스트 업데이트 ── */
   function updateLoadingStatus(main, sub) {
     document.getElementById('loadingStatusText').textContent = main;
@@ -921,21 +901,18 @@
       updateLoadingStatus('수요 점수 계산 중...', '40개 핫스팟 × 3가지 전략');
       await sleep(500);
 
-      // 단계 2: 3개 경로 계산
-      updateLoadingStatus('1번 수요 우선 경로 탐색 중...', '수요 가중 최근접 이웃 + 2-opt');
+      // 단계 2: 3개 경로 계산 (각각 다른 알고리즘)
+      updateLoadingStatus('1번 수요 우선 경로 탐색 중...', '수요² 가중 NN + 수요 2-opt');
       await sleep(300);
-      var demandHotspots = getAdjustedHotspots('demand', hour, day, weather);
-      routeResults.demand = planEmptyCarRoute(currentStartPos, demandHotspots, hour, day, weather, maxStops);
+      routeResults.demand = planEmptyCarRoute(currentStartPos, HOTSPOTS, hour, day, weather, maxStops, 'demand');
 
-      updateLoadingStatus('2번 균형 경로 탐색 중...', '수요 + 거리 종합 최적화');
+      updateLoadingStatus('2번 균형 경로 탐색 중...', '종합 가치 NN + 균형 2-opt');
       await sleep(300);
-      var balancedHotspots = getAdjustedHotspots('balanced', hour, day, weather);
-      routeResults.balanced = planEmptyCarRoute(currentStartPos, balancedHotspots, hour, day, weather, maxStops);
+      routeResults.balanced = planEmptyCarRoute(currentStartPos, HOTSPOTS, hour, day, weather, maxStops, 'balanced');
 
-      updateLoadingStatus('3번 거리 우선 경로 탐색 중...', '최단 거리 기반 최적화');
+      updateLoadingStatus('3번 거리 우선 경로 탐색 중...', '순수 거리 NN + 거리 2-opt');
       await sleep(300);
-      var distanceHotspots = getAdjustedHotspots('distance', hour, day, weather);
-      routeResults.distance = planEmptyCarRoute(currentStartPos, distanceHotspots, hour, day, weather, maxStops);
+      routeResults.distance = planEmptyCarRoute(currentStartPos, HOTSPOTS, hour, day, weather, maxStops, 'distance');
 
       // 단계 3: OSRM 도로 매칭 (3개 모두)
       updateLoadingStatus('도로 경로 매칭 중...', 'OSRM 서버 조회 (3개 경로)');

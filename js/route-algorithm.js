@@ -1,6 +1,7 @@
 /* ═══════════════════════════════════════════
    택시내비AI — route-algorithm.js
    빈차 운행 경로 최적화 알고리즘
+   3가지 전략: 수요 우선 / 균형 / 거리 우선
    ═══════════════════════════════════════════ */
 
 function haversineDistance(lat1, lng1, lat2, lng2) {
@@ -27,8 +28,14 @@ function buildDistanceMatrix(spots) {
   return matrix;
 }
 
-/* ── 수요 가중 최근접 이웃 (Demand-Weighted Nearest Neighbor) ── */
-function demandWeightedNearestNeighbor(distMatrix, scores, startIndex) {
+/* ══════════════════════════════════════
+   전략 1: 수요 우선 (Demand-First)
+   — 수요 점수 높은 곳을 우선 방문
+   — 거리가 멀어도 수요 높으면 선택
+   ══════════════════════════════════════ */
+
+/* 수요 가중 최근접 이웃: value = score^2 / distance */
+function demandFirstNearestNeighbor(distMatrix, scores, startIndex) {
   var n = distMatrix.length;
   var visited = new Array(n).fill(false);
   var route = [startIndex];
@@ -43,8 +50,9 @@ function demandWeightedNearestNeighbor(distMatrix, scores, startIndex) {
       if (visited[j]) continue;
       var dist = distMatrix[current][j];
       if (dist < 0.001) dist = 0.001;
-      // 수요 점수를 거리로 나눈 가치 함수: score / distance
-      var value = (scores[j] || 50) / dist;
+      var score = scores[j] || 1;
+      // 수요 우선: score^2 / distance (수요에 훨씬 높은 가중치)
+      var value = (score * score) / dist;
       if (value > bestValue) {
         bestValue = value;
         bestNext = j;
@@ -59,9 +67,9 @@ function demandWeightedNearestNeighbor(distMatrix, scores, startIndex) {
   return route;
 }
 
-/* ── 2-opt 개선 (수요 가중) ── */
-function twoOptImproveWeighted(route, distMatrix, scores, maxIterations) {
-  maxIterations = maxIterations || 100;
+/* 수요 가중 2-opt: cost = distance / (score/100)^2 */
+function twoOptDemandFirst(route, distMatrix, scores, maxIterations) {
+  maxIterations = maxIterations || 80;
   var bestRoute = route.slice();
   var improved = true;
   var iteration = 0;
@@ -70,15 +78,13 @@ function twoOptImproveWeighted(route, distMatrix, scores, maxIterations) {
     var cost = 0;
     for (var i = 0; i < r.length - 1; i++) {
       var dist = distMatrix[r[i]][r[i + 1]];
-      var nextScore = scores[r[i + 1]] || 50;
-      // 비용 = 거리 / 수요점수 (높은 수요로 갈수록 낮은 비용)
-      cost += dist / (nextScore / 100 + 0.1);
+      var nextScore = scores[r[i + 1]] || 1;
+      cost += dist / Math.pow(nextScore / 100, 2);
     }
     return cost;
   }
 
   var bestCost = routeCost(bestRoute);
-
   while (improved && iteration < maxIterations) {
     improved = false;
     iteration++;
@@ -99,22 +105,198 @@ function twoOptImproveWeighted(route, distMatrix, scores, maxIterations) {
   return bestRoute;
 }
 
-/* ── 빈차 최적 경로 계획 ── */
-function planEmptyCarRoute(currentPos, hotspots, hour, dayOfWeek, weather, maxStops) {
+/* ══════════════════════════════════════
+   전략 2: 균형 (Balanced)
+   — 수요와 거리를 5:5 비율로 균형
+   — 적절한 수요 + 적절한 거리
+   ══════════════════════════════════════ */
+
+/* 균형 최근접 이웃: value = score / sqrt(distance) */
+function balancedNearestNeighbor(distMatrix, scores, startIndex) {
+  var n = distMatrix.length;
+  var visited = new Array(n).fill(false);
+  var route = [startIndex];
+  visited[startIndex] = true;
+  var current = startIndex;
+
+  for (var step = 1; step < n; step++) {
+    var bestValue = -Infinity;
+    var bestNext = -1;
+
+    for (var j = 0; j < n; j++) {
+      if (visited[j]) continue;
+      var dist = distMatrix[current][j];
+      if (dist < 0.001) dist = 0.001;
+      var score = scores[j] || 1;
+      // 균형: score / sqrt(distance) (수요와 거리를 균형 있게)
+      var value = score / Math.sqrt(dist);
+      if (value > bestValue) {
+        bestValue = value;
+        bestNext = j;
+      }
+    }
+
+    if (bestNext === -1) break;
+    route.push(bestNext);
+    visited[bestNext] = true;
+    current = bestNext;
+  }
+  return route;
+}
+
+/* 균형 2-opt: cost = distance * (1 + 1/(score/100)) */
+function twoOptBalanced(route, distMatrix, scores, maxIterations) {
+  maxIterations = maxIterations || 80;
+  var bestRoute = route.slice();
+  var improved = true;
+  var iteration = 0;
+
+  function routeCost(r) {
+    var cost = 0;
+    for (var i = 0; i < r.length - 1; i++) {
+      var dist = distMatrix[r[i]][r[i + 1]];
+      var nextScore = scores[r[i + 1]] || 1;
+      // 균형: 거리 × (1 + 1/정규화점수) → 수요 높으면 비용 약간 낮아짐
+      cost += dist * (1 + 1 / (nextScore / 100 + 0.5));
+    }
+    return cost;
+  }
+
+  var bestCost = routeCost(bestRoute);
+  while (improved && iteration < maxIterations) {
+    improved = false;
+    iteration++;
+    for (var i = 1; i < bestRoute.length - 1; i++) {
+      for (var j = i + 1; j < bestRoute.length; j++) {
+        var newRoute = bestRoute.slice();
+        var reversed = newRoute.slice(i, j + 1).reverse();
+        for (var k = 0; k < reversed.length; k++) newRoute[i + k] = reversed[k];
+        var newCost = routeCost(newRoute);
+        if (newCost < bestCost) {
+          bestRoute = newRoute;
+          bestCost = newCost;
+          improved = true;
+        }
+      }
+    }
+  }
+  return bestRoute;
+}
+
+/* ══════════════════════════════════════
+   전략 3: 거리 우선 (Distance-First)
+   — 순수하게 가까운 곳부터 방문
+   — 총 이동 거리를 최소화
+   ══════════════════════════════════════ */
+
+/* 순수 최근접 이웃: 거리만 고려 */
+function distanceFirstNearestNeighbor(distMatrix, startIndex) {
+  var n = distMatrix.length;
+  var visited = new Array(n).fill(false);
+  var route = [startIndex];
+  visited[startIndex] = true;
+  var current = startIndex;
+
+  for (var step = 1; step < n; step++) {
+    var bestDist = Infinity;
+    var bestNext = -1;
+
+    for (var j = 0; j < n; j++) {
+      if (visited[j]) continue;
+      var dist = distMatrix[current][j];
+      if (dist < bestDist) {
+        bestDist = dist;
+        bestNext = j;
+      }
+    }
+
+    if (bestNext === -1) break;
+    route.push(bestNext);
+    visited[bestNext] = true;
+    current = bestNext;
+  }
+  return route;
+}
+
+/* 순수 거리 2-opt: cost = 총 거리 */
+function twoOptDistanceFirst(route, distMatrix, maxIterations) {
+  maxIterations = maxIterations || 100;
+  var bestRoute = route.slice();
+  var improved = true;
+  var iteration = 0;
+
+  function routeCost(r) {
+    var cost = 0;
+    for (var i = 0; i < r.length - 1; i++) {
+      cost += distMatrix[r[i]][r[i + 1]];
+    }
+    return cost;
+  }
+
+  var bestCost = routeCost(bestRoute);
+  while (improved && iteration < maxIterations) {
+    improved = false;
+    iteration++;
+    for (var i = 1; i < bestRoute.length - 1; i++) {
+      for (var j = i + 1; j < bestRoute.length; j++) {
+        var d1 = distMatrix[bestRoute[i - 1]][bestRoute[i]] +
+                 (j + 1 < bestRoute.length ? distMatrix[bestRoute[j]][bestRoute[j + 1]] : 0);
+        var d2 = distMatrix[bestRoute[i - 1]][bestRoute[j]] +
+                 (j + 1 < bestRoute.length ? distMatrix[bestRoute[i]][bestRoute[j + 1]] : 0);
+        if (d2 < d1) {
+          var reversed = bestRoute.slice(i, j + 1).reverse();
+          for (var k = 0; k < reversed.length; k++) bestRoute[i + k] = reversed[k];
+          bestCost = routeCost(bestRoute);
+          improved = true;
+        }
+      }
+    }
+  }
+  return bestRoute;
+}
+
+/* ══════════════════════════════════════
+   통합 빈차 경로 계획 함수
+   priority: 'demand' | 'balanced' | 'distance'
+   ══════════════════════════════════════ */
+function planEmptyCarRoute(currentPos, hotspots, hour, dayOfWeek, weather, maxStops, priority) {
   maxStops = maxStops || 8;
+  priority = priority || 'balanced';
   hour = hour !== undefined ? hour : new Date().getHours();
 
-  // 1. 각 핫스팟의 실시간 수요 점수 계산
+  // 1. 각 핫스팟의 수요 점수 + 출발지 거리 계산
   var scored = hotspots.map(function(hs) {
     var score = calculateDemandScore(hs, hour, dayOfWeek, weather);
-    return { hotspot: hs, score: score };
+    var distFromStart = haversineDistance(currentPos.lat, currentPos.lng, hs.lat, hs.lng);
+    return { hotspot: hs, score: score, distFromStart: distFromStart };
   });
 
-  // 2. 점수 기준 정렬 후 상위 N개 선택
-  scored.sort(function(a, b) { return b.score - a.score; });
-  var topSpots = scored.slice(0, Math.min(maxStops * 2, scored.length));
+  // 2. 전략별 핫스팟 선택 (후보 풀 구성)
+  var candidateCount = Math.min(maxStops * 2, scored.length);
+  var topSpots;
 
-  // 3. 거리와 점수를 종합하여 최종 핫스팟 선택
+  if (priority === 'demand') {
+    // 수요 우선: 순수하게 수요 점수 높은 순
+    scored.sort(function(a, b) { return b.score - a.score; });
+    topSpots = scored.slice(0, candidateCount);
+
+  } else if (priority === 'distance') {
+    // 거리 우선: 출발지에서 가까운 순 (최소 수요 30 이상 필터)
+    var filtered = scored.filter(function(s) { return s.score >= 30; });
+    if (filtered.length < maxStops) filtered = scored;
+    filtered.sort(function(a, b) { return a.distFromStart - b.distFromStart; });
+    topSpots = filtered.slice(0, candidateCount);
+
+  } else {
+    // 균형: 종합 가치 = score / sqrt(distFromStart + 0.5) 기준
+    scored.forEach(function(s) {
+      s.combinedValue = s.score / Math.sqrt(s.distFromStart + 0.5);
+    });
+    scored.sort(function(a, b) { return b.combinedValue - a.combinedValue; });
+    topSpots = scored.slice(0, candidateCount);
+  }
+
+  // 3. 경로 포인트 구성 (출발지 = index 0)
   var allPoints = [{ lat: currentPos.lat, lng: currentPos.lng }];
   var spotScores = [0];
   topSpots.forEach(function(s) {
@@ -124,16 +306,26 @@ function planEmptyCarRoute(currentPos, hotspots, hour, dayOfWeek, weather, maxSt
 
   var distMatrix = buildDistanceMatrix(allPoints);
 
-  // 4. 수요 가중 최근접 이웃으로 초기 경로 생성
-  var route = demandWeightedNearestNeighbor(distMatrix, spotScores, 0);
+  // 4. 전략별 경로 탐색 알고리즘
+  var route;
 
-  // maxStops+1까지만 (현재위치 포함)
-  if (route.length > maxStops + 1) route = route.slice(0, maxStops + 1);
+  if (priority === 'demand') {
+    route = demandFirstNearestNeighbor(distMatrix, spotScores, 0);
+    if (route.length > maxStops + 1) route = route.slice(0, maxStops + 1);
+    route = twoOptDemandFirst(route, distMatrix, spotScores, 80);
 
-  // 5. 2-opt 개선
-  route = twoOptImproveWeighted(route, distMatrix, spotScores, 80);
+  } else if (priority === 'distance') {
+    route = distanceFirstNearestNeighbor(distMatrix, 0);
+    if (route.length > maxStops + 1) route = route.slice(0, maxStops + 1);
+    route = twoOptDistanceFirst(route, distMatrix, 100);
 
-  // 6. 결과 구성
+  } else {
+    route = balancedNearestNeighbor(distMatrix, spotScores, 0);
+    if (route.length > maxStops + 1) route = route.slice(0, maxStops + 1);
+    route = twoOptBalanced(route, distMatrix, spotScores, 80);
+  }
+
+  // 5. 결과 구성
   var routeSpots = [];
   var totalDist = 0;
   var totalScore = 0;
@@ -160,8 +352,8 @@ function planEmptyCarRoute(currentPos, hotspots, hour, dayOfWeek, weather, maxSt
   }
 
   var roadDist = totalDist * 1.4;
-  var estimatedTime = Math.round((roadDist / 25) * 60); // 시내 25km/h
-  var fuelCost = Math.round(roadDist * 160); // LPG 기준 km당 160원
+  var estimatedTime = Math.round((roadDist / 25) * 60);
+  var fuelCost = Math.round(roadDist * 160);
 
   return {
     route: routeSpots,
@@ -229,7 +421,7 @@ function estimateRouteSchedule(routeResult, startTime) {
 
   for (var i = 0; i < route.length; i++) {
     var arrivalTime = minutesToTimeStr(currentMinutes);
-    var stayMinutes = (i === 0) ? 0 : 5; // 핫스팟 도착 후 대기/탐색 5분
+    var stayMinutes = (i === 0) ? 0 : 5;
     var departureTime = minutesToTimeStr(currentMinutes + stayMinutes);
 
     var distanceToNext = 0;
