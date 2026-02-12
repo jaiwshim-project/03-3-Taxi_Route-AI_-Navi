@@ -13,7 +13,6 @@ function getScoreBarColor(s) { return s >= 80 ? 'bg-red-500' : s >= 65 ? 'bg-ora
 /* ── 헤더 렌더링 ── */
 function renderHeader(active) {
   var nav = [
-    { href: 'dashboard.html', label: '대시보드', key: 'dashboard' },
     { href: 'heatmap.html', label: '수요 히트맵', key: 'heatmap' },
     { href: 'route-optimizer.html', label: '경로 최적화', key: 'route' },
     { href: 'simulation.html', label: '시뮬레이션', key: 'simulation' },
