@@ -372,21 +372,41 @@ function planEmptyCarRoute(currentPos, hotspots, hour, dayOfWeek, weather, maxSt
   };
 }
 
-/* ── OSRM 실제 도로 경로 ── */
+/* ── OSRM 실제 도로 경로 (자동차 전용도로 제외) ── */
 async function getOSRMRoute(waypoints) {
   if (!waypoints || waypoints.length < 2) return { distance: 0, duration: 0, geometry: [] };
   var coords = waypoints.map(function(wp) { return wp.lng + ',' + wp.lat; }).join(';');
-  var url = 'https://router.project-osrm.org/route/v1/driving/' + coords + '?overview=full&geometries=polyline&steps=false';
+  var baseUrl = 'https://router.project-osrm.org/route/v1/driving/' + coords;
+  var params = '?overview=full&geometries=polyline&steps=false';
+
+  // 1차 시도: exclude=motorway (자동차 전용도로 제외)
   try {
-    var response = await fetch(url);
+    var response = await fetch(baseUrl + params + '&exclude=motorway');
     if (!response.ok) throw new Error('OSRM HTTP ' + response.status);
     var data = await response.json();
-    if (data.code !== 'Ok' || !data.routes || data.routes.length === 0) throw new Error('OSRM no route');
-    var route = data.routes[0];
+    if (data.code === 'Ok' && data.routes && data.routes.length > 0) {
+      var route = data.routes[0];
+      return {
+        distance: Math.round(route.distance / 10) / 100,
+        duration: Math.round(route.duration / 60),
+        geometry: decodePolyline(route.geometry)
+      };
+    }
+  } catch (e) {
+    console.warn('[OSRM] exclude=motorway 실패, 재시도:', e.message);
+  }
+
+  // 2차 시도: exclude 없이 기본 라우팅
+  try {
+    var response2 = await fetch(baseUrl + params);
+    if (!response2.ok) throw new Error('OSRM HTTP ' + response2.status);
+    var data2 = await response2.json();
+    if (data2.code !== 'Ok' || !data2.routes || data2.routes.length === 0) throw new Error('OSRM no route');
+    var route2 = data2.routes[0];
     return {
-      distance: Math.round(route.distance / 10) / 100,
-      duration: Math.round(route.duration / 60),
-      geometry: decodePolyline(route.geometry)
+      distance: Math.round(route2.distance / 10) / 100,
+      duration: Math.round(route2.duration / 60),
+      geometry: decodePolyline(route2.geometry)
     };
   } catch (err) {
     console.warn('[OSRM] 라우팅 실패:', err.message);

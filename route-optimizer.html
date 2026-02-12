@@ -518,7 +518,7 @@
           </div>
           <div class="flex items-center justify-between">
             <div class="text-sm text-gray-700">
-              분석 대상: <span id="hotspotCount" class="font-bold text-amber-600">40</span>개 핫스팟
+              분석 대상: <span id="hotspotCount" class="font-bold text-amber-600">40</span>개 핫스팟 <span id="riverSideLabel" class="text-xs text-gray-400"></span>
             </div>
             <button id="detailToggleBtn" class="text-xs text-blue-600 font-semibold hover:underline" onclick="toggleHotspotDetail()">상세 보기 &#x25BC;</button>
           </div>
@@ -707,21 +707,45 @@
   /* 현재 선택된 경로 */
   var selectedRoute = null;
 
-  /* ── 출발 위치 데이터 맵 ── */
+  /* ── 출발 위치 데이터 맵 (side: 한강 기준 강북/강남) ── */
   var START_LOCATIONS = {
-    gangnam:         { lat: 37.4979, lng: 127.0276, name: '강남역' },
-    seoul_station:   { lat: 37.5547, lng: 126.9707, name: '서울역' },
-    hongdae:         { lat: 37.5571, lng: 126.9246, name: '홍대입구역' },
-    jamsil:          { lat: 37.5133, lng: 127.1000, name: '잠실역' },
-    yeouido:         { lat: 37.5252, lng: 126.9256, name: '여의도 IFC' },
-    gwanghwamun:     { lat: 37.5759, lng: 126.9769, name: '광화문' },
-    gangnam_express: { lat: 37.5048, lng: 127.0040, name: '고속터미널' },
-    gimpo:           { lat: 37.5616, lng: 126.8016, name: '김포공항' },
-    itaewon:         { lat: 37.5346, lng: 126.9946, name: '이태원역' },
-    myeongdong:      { lat: 37.5636, lng: 126.9850, name: '명동' },
-    sindorim:        { lat: 37.5088, lng: 126.8912, name: '신도림역' },
-    guro_digital:    { lat: 37.4853, lng: 126.9016, name: '구로디지털단지' }
+    gangnam:         { lat: 37.4979, lng: 127.0276, name: '강남역',         side: 'south' },
+    seoul_station:   { lat: 37.5547, lng: 126.9707, name: '서울역',         side: 'north' },
+    hongdae:         { lat: 37.5571, lng: 126.9246, name: '홍대입구역',     side: 'north' },
+    jamsil:          { lat: 37.5133, lng: 127.1000, name: '잠실역',         side: 'south' },
+    yeouido:         { lat: 37.5252, lng: 126.9256, name: '여의도 IFC',     side: 'south' },
+    gwanghwamun:     { lat: 37.5759, lng: 126.9769, name: '광화문',         side: 'north' },
+    gangnam_express: { lat: 37.5048, lng: 127.0040, name: '고속터미널',     side: 'south' },
+    gimpo:           { lat: 37.5616, lng: 126.8016, name: '김포공항',       side: 'south' },
+    itaewon:         { lat: 37.5346, lng: 126.9946, name: '이태원역',       side: 'north' },
+    myeongdong:      { lat: 37.5636, lng: 126.9850, name: '명동',           side: 'north' },
+    sindorim:        { lat: 37.5088, lng: 126.8912, name: '신도림역',       side: 'south' },
+    guro_digital:    { lat: 37.4853, lng: 126.9016, name: '구로디지털단지', side: 'south' }
   };
+
+  /* ── 좌표로 한강 남/북 판별 (구간별 근사선) ── */
+  function getCoordRiverSide(lat, lng) {
+    // 한강 중심선 실측 근사: [경도, 위도] 서→동
+    var pts = [
+      [126.75, 37.590], [126.82, 37.570], [126.87, 37.555],
+      [126.91, 37.540], [126.93, 37.528], [126.96, 37.525],
+      [127.00, 37.524], [127.04, 37.522], [127.08, 37.520],
+      [127.10, 37.519], [127.13, 37.535], [127.16, 37.540]
+    ];
+    var riverLat;
+    if (lng <= pts[0][0]) { riverLat = pts[0][1]; }
+    else if (lng >= pts[pts.length - 1][0]) { riverLat = pts[pts.length - 1][1]; }
+    else {
+      for (var i = 0; i < pts.length - 1; i++) {
+        if (lng >= pts[i][0] && lng < pts[i + 1][0]) {
+          var t = (lng - pts[i][0]) / (pts[i + 1][0] - pts[i][0]);
+          riverLat = pts[i][1] + t * (pts[i + 1][1] - pts[i][1]);
+          break;
+        }
+      }
+    }
+    return lat > riverLat ? 'north' : 'south';
+  }
 
   /* ── 유틸 ── */
   function sleep(ms) {
@@ -761,13 +785,15 @@
       if (!isMapSelectMode) return;
       var lat = Math.round(e.latlng.lat * 10000) / 10000;
       var lng = Math.round(e.latlng.lng * 10000) / 10000;
-      currentStartPos = { lat: lat, lng: lng, name: '사용자 지정 (' + lat + ', ' + lng + ')' };
+      var clickSide = getCoordRiverSide(lat, lng);
+      currentStartPos = { lat: lat, lng: lng, name: '사용자 지정 (' + lat + ', ' + lng + ')', side: clickSide };
       placeStartMarker(lat, lng);
       isMapSelectMode = false;
       document.getElementById('mapSelectHint').classList.add('hidden');
       document.getElementById('selectedPosInfo').classList.remove('hidden');
       document.getElementById('selectedPosInfo').innerHTML =
-        '<span class="font-semibold text-amber-700">&#x1F4CC; 선택 위치:</span> ' + lat + ', ' + lng;
+        '<span class="font-semibold text-amber-700">&#x1F4CC; 선택 위치:</span> ' + lat + ', ' + lng +
+        ' <span class="text-xs text-gray-400">(' + (clickSide === 'north' ? '강북' : '강남') + ')</span>';
       map.getContainer().style.cursor = '';
     });
   }
@@ -825,7 +851,7 @@
 
     if (val && START_LOCATIONS[val]) {
       var loc = START_LOCATIONS[val];
-      currentStartPos = { lat: loc.lat, lng: loc.lng, name: loc.name };
+      currentStartPos = { lat: loc.lat, lng: loc.lng, name: loc.name, side: loc.side };
       placeStartMarker(loc.lat, loc.lng);
     } else {
       currentStartPos = null;
@@ -843,8 +869,16 @@
     document.getElementById('detailToggleBtn').innerHTML = hotspotDetailVisible ? '접기 &#x25B2;' : '상세 보기 &#x25BC;';
   }
 
-  function updateHotspotCount() {
-    document.getElementById('hotspotCount').textContent = HOTSPOTS.length;
+  function updateHotspotCount(filtered, side) {
+    var el = document.getElementById('hotspotCount');
+    var label = document.getElementById('riverSideLabel');
+    if (filtered && filtered < HOTSPOTS.length) {
+      el.textContent = filtered;
+      if (label && side) label.textContent = '(' + (side === 'north' ? '강북권' : '강남권') + ')';
+    } else {
+      el.textContent = HOTSPOTS.length;
+      if (label) label.textContent = '';
+    }
   }
 
   function renderHotspotDetailList() {
@@ -862,6 +896,54 @@
       return '<span class="hotspot-chip" style="' + color + '">' + s.name + ' <b>' + s.score + '</b></span>';
     }).join('');
     document.getElementById('hotspotDetailList').innerHTML = html;
+  }
+
+  /* ── 구간별 OSRM 라우팅 (한강 건너기 방지) ── */
+  async function getSegmentedOSRMRoute(waypoints) {
+    if (!waypoints || waypoints.length < 2) return { distance: 0, duration: 0, geometry: [] };
+
+    var totalDist = 0, totalDur = 0, allGeom = [];
+
+    for (var i = 0; i < waypoints.length - 1; i++) {
+      var segment = [waypoints[i], waypoints[i + 1]];
+      try {
+        var result = await getOSRMRoute(segment);
+        if (result && result.geometry && result.geometry.length > 0) {
+          // 한강 건너는 구간 감지: 시작점/끝점과 다른 쪽 좌표가 있으면 직선 대체
+          var segStartSide = getCoordRiverSide(segment[0].lat, segment[0].lng);
+          var crosses = false;
+          for (var g = 0; g < result.geometry.length; g++) {
+            var gSide = getCoordRiverSide(result.geometry[g][0], result.geometry[g][1]);
+            if (gSide !== segStartSide) { crosses = true; break; }
+          }
+          if (crosses) {
+            console.warn('[OSRM] 구간 ' + (i + 1) + ' 한강 통과 감지 → 직선 대체');
+            allGeom.push([segment[0].lat, segment[0].lng]);
+            allGeom.push([segment[1].lat, segment[1].lng]);
+            var directDist = haversineDistance(segment[0].lat, segment[0].lng, segment[1].lat, segment[1].lng) * 1.4;
+            totalDist += directDist;
+            totalDur += Math.round((directDist / 25) * 60);
+          } else {
+            allGeom = allGeom.concat(result.geometry);
+            totalDist += result.distance;
+            totalDur += result.duration;
+          }
+        }
+      } catch (e) {
+        // 실패시 직선 대체
+        allGeom.push([segment[0].lat, segment[0].lng]);
+        allGeom.push([segment[1].lat, segment[1].lng]);
+        var d = haversineDistance(segment[0].lat, segment[0].lng, segment[1].lat, segment[1].lng) * 1.4;
+        totalDist += d;
+        totalDur += Math.round((d / 25) * 60);
+      }
+    }
+
+    return {
+      distance: Math.round(totalDist * 100) / 100,
+      duration: totalDur,
+      geometry: allGeom
+    };
   }
 
   /* ── 로딩 텍스트 업데이트 ── */
@@ -900,30 +982,46 @@
     var maxStops = parseInt(document.getElementById('maxStopsSlider').value);
 
     try {
+      // 단계 0: 한강 기준 같은 쪽 핫스팟만 필터링 (다리 건너기 방지)
+      // 드롭다운 선택시 정확한 side 값 사용, 지도 클릭시 좌표 기반 판별
+      var startSide = currentStartPos.side || getCoordRiverSide(currentStartPos.lat, currentStartPos.lng);
+
+      var northDistricts = ['종로구','중구','용산구','성동구','광진구','동대문구','중랑구','성북구','강북구','도봉구','노원구','은평구','서대문구','마포구'];
+      var filteredHotspots = HOTSPOTS.filter(function(hs) {
+        var hsSide = northDistricts.indexOf(hs.district) !== -1 ? 'north' : 'south';
+        return hsSide === startSide;
+      });
+
+      console.log('[한강 필터] 출발지:', currentStartPos.name, '| 판별:', startSide === 'north' ? '강북' : '강남');
+      console.log('[한강 필터] 전체:', HOTSPOTS.length + '개 → 같은 쪽:', filteredHotspots.length + '개');
+
+      updateHotspotCount(filteredHotspots.length, startSide);
+
       // 단계 1: 수요 분석
-      updateLoadingStatus('수요 점수 계산 중...', '40개 핫스팟 × 3가지 전략');
+      updateLoadingStatus('수요 점수 계산 중...', filteredHotspots.length + '개 핫스팟 (' + (startSide === 'north' ? '강북' : '강남') + ') × 3가지 전략');
       await sleep(500);
 
-      // 단계 2: 3개 경로 계산 (각각 다른 알고리즘)
+      // 단계 2: 3개 경로 계산 (필터링된 핫스팟만 사용)
       updateLoadingStatus('1번 수요 우선 경로 탐색 중...', '수요² 가중 NN + 수요 2-opt');
       await sleep(300);
-      routeResults.demand = planEmptyCarRoute(currentStartPos, HOTSPOTS, hour, day, weather, maxStops, 'demand');
+      routeResults.demand = planEmptyCarRoute(currentStartPos, filteredHotspots, hour, day, weather, maxStops, 'demand');
 
       updateLoadingStatus('2번 균형 경로 탐색 중...', '종합 가치 NN + 균형 2-opt');
       await sleep(300);
-      routeResults.balanced = planEmptyCarRoute(currentStartPos, HOTSPOTS, hour, day, weather, maxStops, 'balanced');
+      routeResults.balanced = planEmptyCarRoute(currentStartPos, filteredHotspots, hour, day, weather, maxStops, 'balanced');
 
       updateLoadingStatus('3번 거리 우선 경로 탐색 중...', '순수 거리 NN + 거리 2-opt');
       await sleep(300);
-      routeResults.distance = planEmptyCarRoute(currentStartPos, HOTSPOTS, hour, day, weather, maxStops, 'distance');
+      routeResults.distance = planEmptyCarRoute(currentStartPos, filteredHotspots, hour, day, weather, maxStops, 'distance');
 
-      // 단계 3: OSRM 도로 매칭 (3개 모두)
-      updateLoadingStatus('도로 경로 매칭 중...', 'OSRM 서버 조회 (3개 경로)');
+      // 단계 3: OSRM 도로 매칭 (구간별 라우팅으로 다리 건너기 방지)
+      updateLoadingStatus('도로 경로 매칭 중...', 'OSRM 서버 구간별 조회');
       await sleep(200);
 
       var osrmPromises = ROUTE_KEYS.map(function(key) {
         var wp = routeResults[key].route.map(function(r) { return { lat: r.lat, lng: r.lng }; });
-        return getOSRMRoute(wp).then(function(result) {
+        // 구간별 (2점씩) OSRM 라우팅 → 합산
+        return getSegmentedOSRMRoute(wp).then(function(result) {
           osrmResults[key] = result;
           if (result && result.distance > 0) {
             routeResults[key].totalDistance = result.distance;
