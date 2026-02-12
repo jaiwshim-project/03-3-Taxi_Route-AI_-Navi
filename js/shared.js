@@ -34,11 +34,12 @@ function renderHeader(active) {
     return '<a href="' + n.href + '" class="block px-3 py-2.5 rounded-lg text-sm ' + (isActive ? 'text-amber-600 bg-amber-50 font-semibold' : 'text-gray-700 hover:bg-gray-50') + '">' + n.label + '</a>';
   }).join('');
 
-  return '<header class="sticky top-0 z-50 bg-amber-50/90 backdrop-blur border-b border-amber-200">' +
+  return '<header class="sticky top-0 z-50 backdrop-blur border-b border-sky-200" style="background:rgba(224,242,254,0.92);">' +
     '<div class="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">' +
     '<a href="index.html" class="flex items-center gap-2 shrink-0">' +
     '<div class="w-9 h-9 bg-amber-500 rounded-lg flex items-center justify-center text-lg">&#x1F695;</div>' +
-    '<span class="font-bold text-lg text-gray-900">택시내비<span class="text-amber-600">AI</span></span></a>' +
+    '<span class="font-bold text-lg text-gray-900">택시내비<span class="text-amber-600">AI</span></span>' +
+    '<span class="text-gray-600 hidden sm:inline" style="font-size:0.7em; margin-left:8px;">빈차 운행경로 최적화 AI 맵</span></a>' +
     '<nav class="hidden xl:flex items-center gap-1">' + navLinks + '</nav>' +
     '<button id="mobile-toggle" class="xl:hidden p-2 text-gray-700 hover:bg-gray-100 rounded-lg" onclick="toggleMobileMenu()">' +
     '<svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg></button>' +

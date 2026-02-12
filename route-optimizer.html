@@ -1177,6 +1177,7 @@
       var stops = r.route.filter(function(s) { return s.type === 'hotspot'; });
       var config = ROUTE_CONFIG[key];
 
+      var netIncome = (r.expectedRevenue || 0) - r.fuelCost;
       var statsHtml =
         '<div class="bg-white rounded-md p-1.5 text-center" style="border:1px solid ' + config.main + '20;">' +
           '<div class="font-bold" style="color:' + config.main + ';font-size:13px;">' + r.totalDistance.toFixed(1) + '<span class="text-[9px] font-normal text-gray-500">km</span></div>' +
@@ -1191,8 +1192,8 @@
           '<div class="text-gray-400 text-[9px]">수요</div>' +
         '</div>' +
         '<div class="bg-white rounded-md p-1.5 text-center" style="border:1px solid ' + config.main + '20;">' +
-          '<div class="font-bold" style="color:' + config.main + ';font-size:13px;">' + stops.length + '<span class="text-[9px] font-normal text-gray-500">곳</span></div>' +
-          '<div class="text-gray-400 text-[9px]">경유지</div>' +
+          '<div class="font-bold" style="color:' + (netIncome > 0 ? config.main : '#ef4444') + ';font-size:13px;">' + fmt(Math.round(netIncome / 1000)) + '<span class="text-[9px] font-normal text-gray-500">천원</span></div>' +
+          '<div class="text-gray-400 text-[9px]">순수익</div>' +
         '</div>';
 
       document.getElementById('card-' + key + '-stats').innerHTML = statsHtml;
@@ -1302,15 +1303,18 @@
     var metrics = [
       { label: '총 운행 거리', unit: 'km', key: 'totalDistance', better: 'min', decimals: 1 },
       { label: '예상 소요 시간', unit: '분', key: 'estimatedTime', better: 'min', decimals: 0 },
-      { label: '예상 연료비', unit: '원', key: 'fuelCost', better: 'min', decimals: 0, format: true },
       { label: '평균 수요 점수', unit: '점', key: 'avgDemandScore', better: 'max', decimals: 0 },
-      { label: '예상 탑승 건수', unit: '건', key: 'expectedPickups', better: 'max', decimals: 0 },
-      { label: '경유 핫스팟 수', unit: '곳', key: 'stopCount', better: 'max', decimals: 0 }
+      { label: '예상 탑승 건수', unit: '건', key: 'expectedPickups', better: 'max', decimals: 1 },
+      { label: '예상 수입', unit: '원', key: 'expectedRevenue', better: 'max', decimals: 0, format: true },
+      { label: '연료비', unit: '원', key: 'fuelCost', better: 'min', decimals: 0, format: true },
+      { label: '예상 순수익', unit: '원', key: 'netIncome', better: 'max', decimals: 0, format: true }
     ];
 
-    // 값 추출 + 경유지 수 계산
+    // 값 추출 + 순수익 계산
     ROUTE_KEYS.forEach(function(key) {
-      routeResults[key].stopCount = routeResults[key].route.filter(function(s) { return s.type === 'hotspot'; }).length;
+      var r = routeResults[key];
+      r.stopCount = r.route.filter(function(s) { return s.type === 'hotspot'; }).length;
+      r.netIncome = (r.expectedRevenue || 0) - r.fuelCost;
     });
 
     var rows = '';
@@ -1370,16 +1374,27 @@
     '</div>';
   }
 
-  /* ── AI 추천 로직 ── */
+  /* ── AI 추천 로직 (순수익 기반) ── */
   function getBestRouteRecommendation() {
     var scores = {};
+    var maxNet = -Infinity, maxDemand = -Infinity, minDist = Infinity;
     ROUTE_KEYS.forEach(function(key) {
       var r = routeResults[key];
-      // 종합 점수: 수요 50% + 탑승건수 30% - 거리비용 20%
+      var net = (r.expectedRevenue || 0) - r.fuelCost;
+      if (net > maxNet) maxNet = net;
+      if (r.avgDemandScore > maxDemand) maxDemand = r.avgDemandScore;
+      if (r.totalDistance < minDist) minDist = r.totalDistance;
+    });
+
+    ROUTE_KEYS.forEach(function(key) {
+      var r = routeResults[key];
+      var net = (r.expectedRevenue || 0) - r.fuelCost;
+      // 순수익 50% + 수요 점수 25% + 시간 효율(순수익/시간) 25%
+      var netNorm = maxNet > 0 ? net / maxNet : 0;
       var demandNorm = r.avgDemandScore / 100;
-      var pickupNorm = r.expectedPickups / 10;
-      var distPenalty = r.totalDistance / 50;
-      scores[key] = demandNorm * 0.5 + pickupNorm * 0.3 - distPenalty * 0.2;
+      var hoursOnRoute = r.estimatedTime / 60 || 1;
+      var efficiencyNorm = maxNet > 0 ? (net / hoursOnRoute) / (maxNet / 0.5) : 0;
+      scores[key] = netNorm * 0.5 + demandNorm * 0.25 + efficiencyNorm * 0.25;
     });
 
     var bestKey = 'demand';
@@ -1391,10 +1406,12 @@
       }
     });
 
+    var r = routeResults[bestKey];
+    var net = (r.expectedRevenue || 0) - r.fuelCost;
     var reasons = {
-      demand: '수요 점수가 가장 높아 승객 탑승 확률이 가장 높습니다.',
-      balanced: '수요와 거리를 종합적으로 고려한 가장 효율적인 경로입니다.',
-      distance: '최단 거리로 연료비를 절약하면서 효율적으로 운행할 수 있습니다.'
+      demand: '예상 순수익 ' + fmt(net) + '원으로 가장 높고, 수요 점수 ' + r.avgDemandScore + '점으로 승객 만날 확률이 가장 높습니다.',
+      balanced: '순수익 ' + fmt(net) + '원에 시간 효율이 가장 좋아, 수요와 비용의 최적 균형을 이룹니다.',
+      distance: '연료비 ' + fmt(r.fuelCost) + '원으로 최저 비용이며, 순수익 대비 km당 효율이 가장 좋습니다.'
     };
 
     return { key: bestKey, reason: reasons[bestKey] };
@@ -1480,7 +1497,7 @@
     return icons[type] || '&#x1F4CD;';
   }
 
-  /* ── 수익 예측 탭 ── */
+  /* ── 수익 예측 탭 (수요 점수 기반 현실적 예측) ── */
   function renderRevenueTab() {
     if (!routeResults.demand) return '<p class="text-gray-500 text-sm">데이터가 없습니다.</p>';
 
@@ -1488,21 +1505,39 @@
     ROUTE_KEYS.forEach(function(key) {
       var r = routeResults[key];
       var stops = r.route.filter(function(s) { return s.type === 'hotspot'; });
-      var avgFare = stops.length > 0
-        ? Math.round(stops.reduce(function(sum, s) { return sum + (s.avgFare || 8000); }, 0) / stops.length)
-        : 8000;
-      var revenue = r.expectedPickups * avgFare;
+
+      // 각 정류장별 수요 기반 수익 계산
+      var totalPickups = 0;
+      var totalRevenue = 0;
+      var weightedFareSum = 0;
+      var fareCount = 0;
+
+      stops.forEach(function(s) {
+        var prob = s.pickupProb || 0.3;  // 수요 기반 탑승 확률
+        totalPickups += prob;
+        totalRevenue += prob * (s.avgFare || 8000);
+        weightedFareSum += prob * (s.avgFare || 8000);
+        fareCount += prob;
+      });
+
+      var avgFare = fareCount > 0 ? Math.round(weightedFareSum / fareCount) : 8000;
+      var revenue = Math.round(totalRevenue);
       var net = revenue - r.fuelCost;
       var hoursOnRoute = r.estimatedTime / 60;
 
+      // 시간당 수익 (대기 시간 포함)
+      var activeHours = hoursOnRoute > 0 ? hoursOnRoute : 1;
+
       revenueData[key] = {
-        pickups: r.expectedPickups,
+        pickups: Math.round(totalPickups * 10) / 10,
         avgFare: avgFare,
         revenue: revenue,
         fuelCost: r.fuelCost,
         netIncome: net,
-        perHour: hoursOnRoute > 0 ? Math.round(revenue / hoursOnRoute) : 0,
-        perKm: r.totalDistance > 0 ? Math.round(revenue / r.totalDistance) : 0
+        perHour: Math.round(net / activeHours),
+        perKm: r.totalDistance > 0 ? Math.round(net / r.totalDistance) : 0,
+        waitTime: r.totalWaitTime || 0,
+        demandScore: r.avgDemandScore || 0
       };
     });
 
@@ -1541,13 +1576,15 @@
 
     // 상세 테이블
     var tableRows = [
+      { label: '수요 점수', unit: '점', key: 'demandScore', better: 'max' },
       { label: '예상 탑승', unit: '건', key: 'pickups', better: 'max' },
-      { label: '평균 요금', unit: '원', key: 'avgFare', better: 'max', format: true },
+      { label: '가중 평균요금', unit: '원', key: 'avgFare', better: 'max', format: true },
       { label: '예상 수입', unit: '원', key: 'revenue', better: 'max', format: true },
       { label: '연료비', unit: '원', key: 'fuelCost', better: 'min', format: true },
       { label: '순수익', unit: '원', key: 'netIncome', better: 'max', format: true },
-      { label: '시간당 수익', unit: '원', key: 'perHour', better: 'max', format: true },
-      { label: 'km당 수익', unit: '원', key: 'perKm', better: 'max', format: true }
+      { label: '시간당 순수익', unit: '원', key: 'perHour', better: 'max', format: true },
+      { label: 'km당 순수익', unit: '원', key: 'perKm', better: 'max', format: true },
+      { label: '대기 시간', unit: '분', key: 'waitTime', better: 'min' }
     ];
 
     var tRows = '';

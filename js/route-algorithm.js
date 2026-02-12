@@ -330,16 +330,25 @@ function planEmptyCarRoute(currentPos, hotspots, hour, dayOfWeek, weather, maxSt
     route = twoOptBalanced(route, distMatrix, spotScores, 80);
   }
 
-  // 5. 결과 구성
+  // 5. 결과 구성 — 수요 점수 기반 수익 예측
   var routeSpots = [];
   var totalDist = 0;
   var totalScore = 0;
+  var totalPickupProb = 0;       // 탑승 확률 합산
+  var totalExpectedRevenue = 0;  // 기대 수입 합산
+  var totalWaitTime = 0;         // 총 대기 시간(분)
+
   for (var i = 0; i < route.length; i++) {
     var idx = route[i];
     if (idx === 0) {
-      routeSpots.push({ type: 'start', lat: currentPos.lat, lng: currentPos.lng, name: '현재 위치', score: 0 });
+      routeSpots.push({ type: 'start', lat: currentPos.lat, lng: currentPos.lng, name: '현재 위치', score: 0, pickupProb: 0 });
     } else {
       var ts = topSpots[idx - 1];
+      // 수요 점수 기반 탑승 확률: score 90→85%, 70→55%, 50→30%, 30→12%
+      var pickupProb = Math.min(0.95, Math.max(0.05, (ts.score - 20) / 80 * 0.85 + 0.05));
+      // 대기 시간: 수요 높으면 짧게 (score 90→2분, score 50→8분)
+      var waitMin = Math.max(1, Math.round(ts.hotspot.avgWait * (1 - (ts.score - 50) / 150)));
+
       routeSpots.push({
         type: 'hotspot',
         lat: ts.hotspot.lat, lng: ts.hotspot.lng,
@@ -347,17 +356,22 @@ function planEmptyCarRoute(currentPos, hotspots, hour, dayOfWeek, weather, maxSt
         hotspotType: ts.hotspot.type,
         score: ts.score,
         avgFare: ts.hotspot.avgFare,
-        avgWait: ts.hotspot.avgWait,
+        avgWait: waitMin,
         peakHour: ts.hotspot.peakHour,
-        dailyPassengers: ts.hotspot.dailyPassengers
+        dailyPassengers: ts.hotspot.dailyPassengers,
+        pickupProb: Math.round(pickupProb * 100) / 100
       });
       totalScore += ts.score;
+      totalPickupProb += pickupProb;
+      totalExpectedRevenue += pickupProb * (ts.hotspot.avgFare || 8000);
+      totalWaitTime += waitMin;
     }
     if (i > 0) totalDist += distMatrix[route[i - 1]][route[i]];
   }
 
+  var hotspotCount = routeSpots.filter(function(r) { return r.type === 'hotspot'; }).length;
   var roadDist = totalDist * 1.4;
-  var estimatedTime = Math.round((roadDist / 25) * 60);
+  var estimatedTime = Math.round((roadDist / 25) * 60) + totalWaitTime;
   var fuelCost = Math.round(roadDist * 160);
 
   return {
@@ -365,8 +379,10 @@ function planEmptyCarRoute(currentPos, hotspots, hour, dayOfWeek, weather, maxSt
     totalDistance: Math.round(roadDist * 100) / 100,
     estimatedTime: estimatedTime,
     fuelCost: fuelCost,
-    avgDemandScore: routeSpots.length > 1 ? Math.round(totalScore / (routeSpots.length - 1)) : 0,
-    expectedPickups: Math.round(routeSpots.filter(function(r) { return r.type === 'hotspot'; }).length * 0.65),
+    avgDemandScore: hotspotCount > 0 ? Math.round(totalScore / hotspotCount) : 0,
+    expectedPickups: Math.round(totalPickupProb * 10) / 10,
+    expectedRevenue: Math.round(totalExpectedRevenue),
+    totalWaitTime: totalWaitTime,
     distMatrix: distMatrix,
     routeIndices: route
   };
