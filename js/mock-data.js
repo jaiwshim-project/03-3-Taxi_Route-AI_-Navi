@@ -493,7 +493,12 @@ var CITY_DATA = {
       { id: 7,  name: '탑동',         district: '제주시',   type: '유흥',   lat: 33.5173, lng: 126.5256, peakHour: '20:00-02:00', baseScore: 75, avgWait: 4, avgFare: 7500,  dailyPassengers: 1400 },
       { id: 8,  name: '노형동',       district: '제주시',   type: '상업',   lat: 33.4859, lng: 126.4820, peakHour: '18:00-22:00', baseScore: 72, avgWait: 5, avgFare: 7800,  dailyPassengers: 1200 },
       { id: 9,  name: '연동',         district: '제주시',   type: '유흥',   lat: 33.4892, lng: 126.5110, peakHour: '20:00-02:00', baseScore: 80, avgWait: 4, avgFare: 8000,  dailyPassengers: 1600 },
-      { id: 10, name: '함덕해수욕장', district: '제주시',   type: '관광',   lat: 33.5431, lng: 126.6696, peakHour: '10:00-18:00', baseScore: 72, avgWait: 5, avgFare: 9000,  dailyPassengers: 1100 }
+      { id: 10, name: '함덕해수욕장', district: '제주시',   type: '관광',   lat: 33.5431, lng: 126.6696, peakHour: '10:00-18:00', baseScore: 72, avgWait: 5, avgFare: 9000,  dailyPassengers: 1100 },
+      { id: 11, name: '서귀포항',     district: '서귀포시', type: '교통',   lat: 33.2397, lng: 126.5614, peakHour: '07:00-19:00', baseScore: 75, avgWait: 4, avgFare: 9000,  dailyPassengers: 1300 },
+      { id: 12, name: '서귀포올레시장', district: '서귀포시', type: '시장', lat: 33.2489, lng: 126.5671, peakHour: '09:00-18:00', baseScore: 70, avgWait: 5, avgFare: 7500,  dailyPassengers: 1000 },
+      { id: 13, name: '서귀포시청',   district: '서귀포시', type: '업무',   lat: 33.2520, lng: 126.5100, peakHour: '17:00-20:00', baseScore: 68, avgWait: 5, avgFare: 8000,  dailyPassengers: 900  },
+      { id: 14, name: '강정동(제주해군기지)', district: '서귀포시', type: '주거', lat: 33.2380, lng: 126.4680, peakHour: '07:00-09:00', baseScore: 60, avgWait: 6, avgFare: 8500, dailyPassengers: 600 },
+      { id: 15, name: '성산일출봉',   district: '서귀포시', type: '관광',   lat: 33.4580, lng: 126.9415, peakHour: '09:00-17:00', baseScore: 78, avgWait: 4, avgFare: 11000, dailyPassengers: 1500 }
     ]
   }
 };
@@ -588,7 +593,21 @@ function calculateDemandScore(hotspot, hour, dayOfWeek, weather) {
   var dayWeight = DAY_WEIGHTS[dayOfWeek] || 1.0;
   var weatherWeight = WEATHER_WEIGHTS[weather] || 1.0;
 
-  var score = base * hourWeight * typeHourWeight * dayWeight * weatherWeight;
+  // 컨텍스트 승수 (시간 × 유형 × 요일 × 날씨)
+  var context = hourWeight * typeHourWeight * dayWeight * weatherWeight;
+
+  // 피크 시간 점수 포화 방지
+  // 기존: context 2.0이면 95점→190→cap100, 72점→144→cap100 (차별화 없음)
+  // 개선: context 초과분의 15%만 반영 → 95점→109→100, 72점→83 (차별화 유지)
+  // context ≤ 1.0 (비수요 시간대)은 기존과 완전 동일
+  var dampened;
+  if (context <= 1.0) {
+    dampened = context;
+  } else {
+    dampened = 1.0 + (context - 1.0) * 0.15;
+  }
+
+  var score = base * dampened;
   return Math.min(100, Math.round(score));
 }
 

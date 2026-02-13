@@ -767,6 +767,10 @@
             liveDataState && liveDataState.weatherStatus === 'success') {
           applyWeatherToSelect();
         }
+        // 새 도시의 택시승강장 표시
+        if (typeof showTaxiStandsOnMap === 'function') {
+          showTaxiStandsOnMap(map);
+        }
       }).catch(function() {});
     }
   }
@@ -833,7 +837,12 @@
 
     // 실시간 공공데이터 로딩 (비동기, 실패해도 기존 기능 유지)
     if (typeof initLiveData === 'function') {
-      initLiveData().catch(function(e) {
+      initLiveData().then(function() {
+        // 택시승강장 마커를 지도에 표시
+        if (typeof showTaxiStandsOnMap === 'function' && typeof map !== 'undefined') {
+          showTaxiStandsOnMap(map);
+        }
+      }).catch(function(e) {
         console.warn('[실시간] 초기화 실패, mock 데이터로 운영:', e);
       });
     }

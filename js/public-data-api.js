@@ -41,16 +41,43 @@ var PUBLIC_API_CONFIG = {
     }
   },
 
-  // 국토교통부 교통소통정보 (ITS)
+  // 국토교통부 교통소통정보 (data.go.kr 경유)
   traffic: {
-    baseUrl: 'https://openapi.its.go.kr:9443/trafficInfo',
+    baseUrl: 'https://apis.data.go.kr/B553077/api/open/sdpx/trafficInfo',
     cacheTTL: 5 * 60 * 1000, // 5분
-    // 도시별 bounding box
+    // 전국 17개 도시 bounding box
     cityBounds: {
-      seoul: { minX: 126.7642, maxX: 127.1835, minY: 37.4134, maxY: 37.7015 },
-      busan: { minX: 128.8500, maxX: 129.2500, minY: 35.0500, maxY: 35.2500 },
-      daegu: { minX: 128.4500, maxX: 128.7500, minY: 35.8000, maxY: 35.9500 },
-      incheon: { minX: 126.5500, maxX: 126.8000, minY: 37.3500, maxY: 37.5500 }
+      seoul:    { minX: 126.764, maxX: 127.184, minY: 37.413, maxY: 37.702 },
+      busan:    { minX: 128.850, maxX: 129.250, minY: 35.050, maxY: 35.250 },
+      daegu:    { minX: 128.450, maxX: 128.750, minY: 35.800, maxY: 35.950 },
+      incheon:  { minX: 126.550, maxX: 126.800, minY: 37.350, maxY: 37.550 },
+      gwangju:  { minX: 126.750, maxX: 127.000, minY: 35.050, maxY: 35.250 },
+      daejeon:  { minX: 127.280, maxX: 127.500, minY: 36.280, maxY: 36.420 },
+      ulsan:    { minX: 129.200, maxX: 129.450, minY: 35.450, maxY: 35.650 },
+      sejong:   { minX: 127.000, maxX: 127.250, minY: 36.450, maxY: 36.650 },
+      gyeonggi: { minX: 126.700, maxX: 127.400, minY: 37.000, maxY: 37.800 },
+      gangwon:  { minX: 127.500, maxX: 129.000, minY: 37.000, maxY: 38.300 },
+      chungbuk: { minX: 127.300, maxX: 128.000, minY: 36.400, maxY: 37.000 },
+      chungnam: { minX: 126.500, maxX: 127.300, minY: 36.000, maxY: 36.900 },
+      jeonbuk:  { minX: 126.600, maxX: 127.500, minY: 35.400, maxY: 36.100 },
+      jeonnam:  { minX: 126.300, maxX: 127.600, minY: 34.200, maxY: 35.200 },
+      gyeongbuk:{ minX: 128.300, maxX: 129.600, minY: 35.700, maxY: 36.900 },
+      gyeongnam:{ minX: 127.900, maxX: 129.000, minY: 34.800, maxY: 35.600 },
+      jeju:     { minX: 126.100, maxX: 126.950, minY: 33.100, maxY: 33.600 }
+    }
+  },
+
+  // 전국 택시승강장 표준데이터 (data.go.kr)
+  taxiStand: {
+    baseUrl: 'http://api.data.go.kr/openapi/tn_pubr_public_taxi_stand_api',
+    cacheTTL: 60 * 60 * 1000, // 1시간
+    cityNames: {
+      seoul: '서울특별시', busan: '부산광역시', daegu: '대구광역시',
+      incheon: '인천광역시', gwangju: '광주광역시', daejeon: '대전광역시',
+      ulsan: '울산광역시', sejong: '세종특별자치시', gyeonggi: '경기도',
+      gangwon: '강원특별자치도', chungbuk: '충청북도', chungnam: '충청남도',
+      jeonbuk: '전북특별자치도', jeonnam: '전라남도', gyeongbuk: '경상북도',
+      gyeongnam: '경상남도', jeju: '제주특별자치도'
     }
   }
 };
@@ -225,7 +252,7 @@ async function fetchTrafficInfo(cityKey) {
   }
 
   var params = [
-    'apiKey=' + PUBLIC_API_CONFIG.serviceKey,
+    'serviceKey=' + PUBLIC_API_CONFIG.serviceKey,
     'type=all',
     'drcType=all',
     'minX=' + bounds.minX,
@@ -240,9 +267,14 @@ async function fetchTrafficInfo(cityKey) {
   try {
     var data = await fetchWithCorsProxy(url);
 
-    // 응답에서 링크별 속도 정보 추출
+    // 응답에서 링크별 속도 정보 추출 (data.go.kr / ITS 두 가지 형식 지원)
     var links = [];
-    if (data && data.body && data.body.items) {
+    if (data && data.response && data.response.body && data.response.body.items) {
+      // data.go.kr 표준 형식
+      var items = data.response.body.items;
+      links = items.item || items;
+      if (!Array.isArray(links)) links = [links];
+    } else if (data && data.body && data.body.items) {
       links = data.body.items;
     } else if (data && data.body && Array.isArray(data.body)) {
       links = data.body;
@@ -289,13 +321,81 @@ async function fetchTrafficInfo(cityKey) {
   }
 }
 
+/* ── (E-2) 전국 택시승강장 표준데이터 API ── */
+
+async function fetchTaxiStands(cityKey) {
+  cityKey = cityKey || 'seoul';
+  var cacheKey = 'taxistand_' + cityKey;
+  var cached = getCachedData(cacheKey);
+  if (cached) {
+    console.log('[택시승강장] 캐시 사용:', cityKey, '(' + cached.length + '개)');
+    return cached;
+  }
+
+  var cityName = PUBLIC_API_CONFIG.taxiStand.cityNames[cityKey];
+  if (!cityName) {
+    console.warn('[택시승강장] 미지원 도시:', cityKey);
+    return null;
+  }
+
+  var params = [
+    'serviceKey=' + PUBLIC_API_CONFIG.serviceKey,
+    'pageNo=1',
+    'numOfRows=200',
+    'type=json',
+    'ctprvnNm=' + encodeURIComponent(cityName)
+  ].join('&');
+
+  var url = PUBLIC_API_CONFIG.taxiStand.baseUrl + '?' + params;
+
+  try {
+    var data = await fetchWithCorsProxy(url);
+
+    // data.go.kr 표준 응답 파싱
+    var items = [];
+    if (data && data.response && data.response.body && data.response.body.items) {
+      items = data.response.body.items;
+      if (!Array.isArray(items)) items = [items];
+    } else if (data && data.body && data.body.items) {
+      items = data.body.items;
+      if (!Array.isArray(items)) items = [items];
+    }
+
+    var stands = [];
+    items.forEach(function(item) {
+      var lat = parseFloat(item.latitude || item.la || 0);
+      var lng = parseFloat(item.longitude || item.lo || 0);
+      if (lat > 0 && lng > 0) {
+        stands.push({
+          name: item.taxiStandNm || item.pstNm || '택시승강장',
+          lat: lat,
+          lng: lng,
+          address: item.rdnmadr || item.lnmadr || '',
+          type: item.taxiStandSe || '',
+          district: item.signguNm || ''
+        });
+      }
+    });
+
+    setCachedData(cacheKey, stands, PUBLIC_API_CONFIG.taxiStand.cacheTTL);
+    console.log('[택시승강장] API 성공:', cityKey, stands.length + '개 승강장');
+    return stands;
+
+  } catch (e) {
+    console.error('[택시승강장] API 실패:', e.message);
+    return null;
+  }
+}
+
 /* ── (F) 실시간 데이터 상태 관리 + UI ── */
 
 var liveDataState = {
   weather: null,
   traffic: null,
+  taxiStands: null,
   weatherStatus: 'idle',   // idle | loading | success | error
   trafficStatus: 'idle',
+  taxiStandStatus: 'idle',
   lastUpdate: null
 };
 
@@ -337,11 +437,13 @@ async function loadLiveData(cityKey) {
 
   liveDataState.weatherStatus = 'loading';
   liveDataState.trafficStatus = 'loading';
+  liveDataState.taxiStandStatus = 'loading';
   updateLiveDataUI();
 
   var results = await Promise.allSettled([
     fetchCurrentWeather(cityKey),
-    fetchTrafficInfo(cityKey)
+    fetchTrafficInfo(cityKey),
+    fetchTaxiStands(cityKey)
   ]);
 
   // 날씨 결과
@@ -358,6 +460,14 @@ async function loadLiveData(cityKey) {
     liveDataState.trafficStatus = 'success';
   } else {
     liveDataState.trafficStatus = 'error';
+  }
+
+  // 택시승강장 결과
+  if (results[2].status === 'fulfilled' && results[2].value) {
+    liveDataState.taxiStands = results[2].value;
+    liveDataState.taxiStandStatus = 'success';
+  } else {
+    liveDataState.taxiStandStatus = 'error';
   }
 
   liveDataState.lastUpdate = new Date();
@@ -392,7 +502,16 @@ function updateLiveDataUI() {
     '교통'
   );
 
-  badge.innerHTML = wHtml + tHtml;
+  var sHtml = buildStatusLine(
+    liveDataState.taxiStandStatus,
+    function() {
+      var stands = liveDataState.taxiStands;
+      return stands.length + '개 택시승강장';
+    },
+    '승강장'
+  );
+
+  badge.innerHTML = wHtml + tHtml + sHtml;
 }
 
 function buildStatusLine(status, successFn, label) {
@@ -456,6 +575,41 @@ function adjustRouteTimeByTraffic(estimatedTime) {
   if (!liveDataState.traffic || liveDataState.trafficStatus !== 'success') return estimatedTime;
   var multiplier = TRAFFIC_TIME_MULTIPLIER[liveDataState.traffic.congestionLevel] || 1.0;
   return Math.round(estimatedTime * multiplier);
+}
+
+// 택시승강장을 지도에 마커로 표시
+var taxiStandMarkers = [];
+
+function showTaxiStandsOnMap(map) {
+  // 기존 마커 제거
+  taxiStandMarkers.forEach(function(m) { map.removeLayer(m); });
+  taxiStandMarkers = [];
+
+  if (!liveDataState.taxiStands || liveDataState.taxiStandStatus !== 'success') return;
+
+  var taxiIcon = L.divIcon({
+    className: 'taxi-stand-icon',
+    html: '<div style="background:#f59e0b;color:#fff;border-radius:50%;width:22px;height:22px;' +
+      'display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;' +
+      'border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,0.3);">T</div>',
+    iconSize: [22, 22],
+    iconAnchor: [11, 11]
+  });
+
+  liveDataState.taxiStands.forEach(function(stand) {
+    var marker = L.marker([stand.lat, stand.lng], { icon: taxiIcon })
+      .bindPopup(
+        '<div style="font-size:13px;line-height:1.5">' +
+        '<strong>' + stand.name + '</strong>' +
+        (stand.district ? '<br><span style="color:#666">' + stand.district + '</span>' : '') +
+        (stand.address ? '<br><span style="color:#888;font-size:11px">' + stand.address + '</span>' : '') +
+        '</div>'
+      );
+    taxiStandMarkers.push(marker);
+    marker.addTo(map);
+  });
+
+  console.log('[택시승강장] 지도에', taxiStandMarkers.length + '개 마커 표시');
 }
 
 /* ── (H) 자동 초기화 ── */

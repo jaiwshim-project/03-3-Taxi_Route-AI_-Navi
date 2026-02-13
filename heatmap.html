@@ -659,7 +659,11 @@
 
     // 실시간 공공데이터 로딩 (비동기, 실패해도 기존 기능 유지)
     if (typeof initLiveData === 'function') {
-      initLiveData().catch(function(e) {
+      initLiveData().then(function() {
+        if (typeof showTaxiStandsOnMap === 'function' && typeof map !== 'undefined') {
+          showTaxiStandsOnMap(map);
+        }
+      }).catch(function(e) {
         console.warn('[실시간] 초기화 실패, mock 데이터로 운영:', e);
       });
     }
@@ -695,7 +699,11 @@
 
     // 실시간 데이터 재로딩
     if (typeof loadLiveData === 'function') {
-      loadLiveData(cityKey).catch(function() {});
+      loadLiveData(cityKey).then(function() {
+        if (typeof showTaxiStandsOnMap === 'function') {
+          showTaxiStandsOnMap(map);
+        }
+      }).catch(function() {});
     }
   }
 
