@@ -494,11 +494,18 @@ var CITY_DATA = {
       { id: 8,  name: '노형동',       district: '제주시',   type: '상업',   lat: 33.4859, lng: 126.4820, peakHour: '18:00-22:00', baseScore: 72, avgWait: 5, avgFare: 7800,  dailyPassengers: 1200 },
       { id: 9,  name: '연동',         district: '제주시',   type: '유흥',   lat: 33.4892, lng: 126.5110, peakHour: '20:00-02:00', baseScore: 80, avgWait: 4, avgFare: 8000,  dailyPassengers: 1600 },
       { id: 10, name: '함덕해수욕장', district: '제주시',   type: '관광',   lat: 33.5431, lng: 126.6696, peakHour: '10:00-18:00', baseScore: 72, avgWait: 5, avgFare: 9000,  dailyPassengers: 1100 },
-      { id: 11, name: '서귀포항',     district: '서귀포시', type: '교통',   lat: 33.2397, lng: 126.5614, peakHour: '07:00-19:00', baseScore: 75, avgWait: 4, avgFare: 9000,  dailyPassengers: 1300 },
-      { id: 12, name: '서귀포올레시장', district: '서귀포시', type: '시장', lat: 33.2489, lng: 126.5671, peakHour: '09:00-18:00', baseScore: 70, avgWait: 5, avgFare: 7500,  dailyPassengers: 1000 },
-      { id: 13, name: '서귀포시청',   district: '서귀포시', type: '업무',   lat: 33.2520, lng: 126.5100, peakHour: '17:00-20:00', baseScore: 68, avgWait: 5, avgFare: 8000,  dailyPassengers: 900  },
-      { id: 14, name: '강정동(제주해군기지)', district: '서귀포시', type: '주거', lat: 33.2380, lng: 126.4680, peakHour: '07:00-09:00', baseScore: 60, avgWait: 6, avgFare: 8500, dailyPassengers: 600 },
-      { id: 15, name: '성산일출봉',   district: '서귀포시', type: '관광',   lat: 33.4580, lng: 126.9415, peakHour: '09:00-17:00', baseScore: 78, avgWait: 4, avgFare: 11000, dailyPassengers: 1500 }
+      { id: 11, name: '서귀포항',       district: '서귀포시', type: '교통',   lat: 33.2397, lng: 126.5614, peakHour: '07:00-19:00', baseScore: 75, avgWait: 4, avgFare: 9000,  dailyPassengers: 1300 },
+      { id: 12, name: '서귀포올레시장', district: '서귀포시', type: '시장',   lat: 33.2489, lng: 126.5671, peakHour: '09:00-18:00', baseScore: 70, avgWait: 5, avgFare: 7500,  dailyPassengers: 1000 },
+      { id: 13, name: '서귀포시청',     district: '서귀포시', type: '업무',   lat: 33.2520, lng: 126.5100, peakHour: '17:00-20:00', baseScore: 68, avgWait: 5, avgFare: 8000,  dailyPassengers: 900  },
+      { id: 14, name: '천지연폭포입구', district: '서귀포시', type: '관광',   lat: 33.2459, lng: 126.5543, peakHour: '09:00-18:00', baseScore: 76, avgWait: 4, avgFare: 8500,  dailyPassengers: 1400 },
+      { id: 15, name: '이중섭거리',     district: '서귀포시', type: '상업',   lat: 33.2468, lng: 126.5628, peakHour: '11:00-22:00', baseScore: 73, avgWait: 4, avgFare: 7000,  dailyPassengers: 1100 },
+      { id: 16, name: '서귀포버스터미널', district: '서귀포시', type: '교통', lat: 33.2547, lng: 126.5694, peakHour: '06:00-21:00', baseScore: 78, avgWait: 3, avgFare: 9500,  dailyPassengers: 1600 },
+      { id: 17, name: '정방폭포',       district: '서귀포시', type: '관광',   lat: 33.2432, lng: 126.5720, peakHour: '09:00-17:00', baseScore: 72, avgWait: 5, avgFare: 8000,  dailyPassengers: 1000 },
+      { id: 18, name: '새연교(새섬)',   district: '서귀포시', type: '관광',   lat: 33.2370, lng: 126.5590, peakHour: '10:00-20:00', baseScore: 70, avgWait: 5, avgFare: 7500,  dailyPassengers: 900  },
+      { id: 19, name: '서홍동',         district: '서귀포시', type: '주거',   lat: 33.2610, lng: 126.5400, peakHour: '07:00-09:00', baseScore: 62, avgWait: 6, avgFare: 7000,  dailyPassengers: 700  },
+      { id: 20, name: '강정동',         district: '서귀포시', type: '주거',   lat: 33.2480, lng: 126.4920, peakHour: '07:00-09:00', baseScore: 58, avgWait: 6, avgFare: 7500,  dailyPassengers: 500  },
+      { id: 21, name: '중문관광단지',   district: '서귀포시', type: '관광',   lat: 33.2477, lng: 126.4118, peakHour: '10:00-20:00', baseScore: 88, avgWait: 3, avgFare: 12000, dailyPassengers: 2600 },
+      { id: 22, name: '성산일출봉',     district: '서귀포시', type: '관광',   lat: 33.4580, lng: 126.9415, peakHour: '09:00-17:00', baseScore: 78, avgWait: 4, avgFare: 11000, dailyPassengers: 1500 }
     ]
   }
 };
