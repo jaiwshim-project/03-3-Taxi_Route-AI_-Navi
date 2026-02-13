@@ -672,12 +672,12 @@
   <div id="app-footer" class="hidden"></div>
 
   <!-- ═══ 스크립트 ═══ -->
-  <script src="js/mock-data.js"></script>
-  <script src="js/shared.js"></script>
-  <script src="js/map-engine.js"></script>
-  <script src="js/route-algorithm.js"></script>
-  <script src="js/demand-engine.js"></script>
-  <script src="js/public-data-api.js"></script>
+  <script src="js/mock-data.js?v=20260213"></script>
+  <script src="js/shared.js?v=20260213"></script>
+  <script src="js/map-engine.js?v=20260213"></script>
+  <script src="js/route-algorithm.js?v=20260213"></script>
+  <script src="js/demand-engine.js?v=20260213"></script>
+  <script src="js/public-data-api.js?v=20260213"></script>
 
   <script>
   /* ═══════════════════════════════════════════
@@ -1091,9 +1091,21 @@
         console.log('[한강 필터] 전체:', HOTSPOTS.length + '개 → 같은 쪽:', filteredHotspots.length + '개');
         updateHotspotCount(filteredHotspots.length, startSide);
       } else {
-        filteredHotspots = HOTSPOTS.slice();
-        console.log('[도시] ' + CITY_DATA[currentCity].name + ' 핫스팟:', filteredHotspots.length + '개');
-        updateHotspotCount();
+        // 비서울: 출발지 15km 반경 내 핫스팟만 사용 (한라산 넘기 등 비현실적 이동 방지)
+        var allWithDist = HOTSPOTS.map(function(hs) {
+          return { hs: hs, dist: haversineDistance(currentStartPos.lat, currentStartPos.lng, hs.lat, hs.lng) };
+        });
+        allWithDist.sort(function(a, b) { return a.dist - b.dist; });
+
+        var nearby = allWithDist.filter(function(item) { return item.dist <= 15; });
+        if (nearby.length >= 3) {
+          filteredHotspots = nearby.map(function(item) { return item.hs; });
+        } else {
+          // 반경 내 핫스팟 부족 시 가까운 순 3개 확보
+          filteredHotspots = allWithDist.slice(0, Math.max(3, nearby.length)).map(function(item) { return item.hs; });
+        }
+        console.log('[반경 필터] ' + CITY_DATA[currentCity].name + ' 전체:', HOTSPOTS.length + '개 → 15km 내:', filteredHotspots.length + '개');
+        updateHotspotCount(filteredHotspots.length);
       }
 
       // 단계 1: 수요 분석
@@ -1131,6 +1143,40 @@
         });
       });
       await Promise.all(osrmPromises);
+
+      // 단계 3.3: OSRM 도로 거리 초과 시 경로 축소 (시내 운행 보장)
+      // 빈차 운행은 시내 위주여야 하므로 총 도로 거리 20km 초과 시 maxStops 줄여서 재계산
+      var MAX_ROUTE_ROAD_DISTANCE = 20; // km (도로 거리 기준)
+      var needRecompute = false;
+      ROUTE_KEYS.forEach(function(key) {
+        if (routeResults[key] && routeResults[key].totalDistance > MAX_ROUTE_ROAD_DISTANCE) {
+          needRecompute = true;
+        }
+      });
+      if (needRecompute && maxStops > 3) {
+        var reducedStops = Math.max(3, maxStops - 2);
+        console.log('[거리 초과] OSRM 도로 거리 20km 초과 → maxStops ' + maxStops + ' → ' + reducedStops + '로 재계산');
+        updateLoadingStatus('경로 거리 초과, 재최적화 중...', '방문지 ' + reducedStops + '개로 축소');
+        await sleep(300);
+
+        routeResults.demand = planEmptyCarRoute(currentStartPos, filteredHotspots, hour, day, weather, reducedStops, 'demand');
+        routeResults.balanced = planEmptyCarRoute(currentStartPos, filteredHotspots, hour, day, weather, reducedStops, 'balanced');
+        routeResults.distance = planEmptyCarRoute(currentStartPos, filteredHotspots, hour, day, weather, reducedStops, 'distance');
+
+        // OSRM 재조회
+        var reOsrmPromises = ROUTE_KEYS.map(function(key) {
+          var wp = routeResults[key].route.map(function(r) { return { lat: r.lat, lng: r.lng }; });
+          return getSegmentedOSRMRoute(wp).then(function(result) {
+            osrmResults[key] = result;
+            if (result && result.distance > 0) {
+              routeResults[key].totalDistance = result.distance;
+              routeResults[key].estimatedTime = result.duration;
+              routeResults[key].fuelCost = Math.round(result.distance * 160);
+            }
+          });
+        });
+        await Promise.all(reOsrmPromises);
+      }
 
       // 단계 3.5: 실시간 교통 혼잡도에 의한 시간 보정
       if (typeof adjustRouteTimeByTraffic === 'function' && typeof liveDataState !== 'undefined' &&
