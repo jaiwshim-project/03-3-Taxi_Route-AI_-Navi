@@ -672,12 +672,12 @@
   <div id="app-footer" class="hidden"></div>
 
   <!-- ═══ 스크립트 ═══ -->
-  <script src="js/mock-data.js?v=20260213d"></script>
-  <script src="js/shared.js?v=20260213d"></script>
-  <script src="js/map-engine.js?v=20260213d"></script>
-  <script src="js/route-algorithm.js?v=20260213d"></script>
-  <script src="js/demand-engine.js?v=20260213d"></script>
-  <script src="js/public-data-api.js?v=20260213d"></script>
+  <script src="js/mock-data.js?v=20260213e"></script>
+  <script src="js/shared.js?v=20260213e"></script>
+  <script src="js/map-engine.js?v=20260213e"></script>
+  <script src="js/route-algorithm.js?v=20260213e"></script>
+  <script src="js/demand-engine.js?v=20260213e"></script>
+  <script src="js/public-data-api.js?v=20260213e"></script>
 
   <script>
   /* ═══════════════════════════════════════════
@@ -1091,20 +1091,20 @@
         console.log('[한강 필터] 전체:', HOTSPOTS.length + '개 → 같은 쪽:', filteredHotspots.length + '개');
         updateHotspotCount(filteredHotspots.length, startSide);
       } else {
-        // 비서울: 출발지 8km 반경 내 핫스팟만 사용 (시내 순환 운행)
+        // 비서울: 출발지 5km 반경 내 핫스팟만 사용 (시내 순환 운행)
         var allWithDist = HOTSPOTS.map(function(hs) {
           return { hs: hs, dist: haversineDistance(currentStartPos.lat, currentStartPos.lng, hs.lat, hs.lng) };
         });
         allWithDist.sort(function(a, b) { return a.dist - b.dist; });
 
-        var nearby = allWithDist.filter(function(item) { return item.dist <= 8; });
+        var nearby = allWithDist.filter(function(item) { return item.dist <= 5; });
         if (nearby.length >= 3) {
           filteredHotspots = nearby.map(function(item) { return item.hs; });
         } else {
           // 반경 내 핫스팟 부족 시 가까운 순 3개 확보
           filteredHotspots = allWithDist.slice(0, Math.max(3, nearby.length)).map(function(item) { return item.hs; });
         }
-        console.log('[반경 필터] ' + CITY_DATA[currentCity].name + ' 전체:', HOTSPOTS.length + '개 → 8km 내:', filteredHotspots.length + '개');
+        console.log('[반경 필터] ' + CITY_DATA[currentCity].name + ' 전체:', HOTSPOTS.length + '개 → 5km 내:', filteredHotspots.length + '개');
         updateHotspotCount(filteredHotspots.length);
       }
 
