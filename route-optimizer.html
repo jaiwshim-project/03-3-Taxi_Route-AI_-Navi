@@ -453,16 +453,6 @@
               </select>
             </div>
           </div>
-          <div>
-            <label class="text-xs text-gray-500 font-medium block mb-1">날씨</label>
-            <select id="weatherSelect" class="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-amber-300 outline-none bg-white">
-              <option value="clear">&#x2600;&#xFE0F; 맑음</option>
-              <option value="cloudy">&#x26C5; 흐림</option>
-              <option value="rain">&#x1F327;&#xFE0F; 비</option>
-              <option value="heavy_rain">&#x26C8;&#xFE0F; 폭우</option>
-              <option value="snow">&#x2744;&#xFE0F; 눈</option>
-            </select>
-          </div>
         </div>
 
         <!-- 섹션 3: 경로 설정 -->
@@ -470,6 +460,17 @@
           <div class="setting-section-title text-green-700">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"/></svg>
             경로 설정
+          </div>
+          <div class="mb-3">
+            <div class="flex items-center justify-between mb-2">
+              <label class="text-xs text-gray-500 font-medium">중심지역 반경</label>
+              <span id="radiusLabel" class="text-sm font-bold text-amber-600">5km</span>
+            </div>
+            <input type="range" id="radiusSlider" min="2" max="10" value="5" step="1" oninput="onRadiusChange(this.value)">
+            <div class="flex justify-between text-[10px] text-gray-400 mt-1">
+              <span>2km</span>
+              <span>10km</span>
+            </div>
           </div>
           <div class="mb-3">
             <div class="flex items-center justify-between mb-2">
@@ -672,12 +673,12 @@
   <div id="app-footer" class="hidden"></div>
 
   <!-- ═══ 스크립트 ═══ -->
-  <script src="js/mock-data.js?v=20260213e"></script>
-  <script src="js/shared.js?v=20260213e"></script>
-  <script src="js/map-engine.js?v=20260213e"></script>
-  <script src="js/route-algorithm.js?v=20260213e"></script>
-  <script src="js/demand-engine.js?v=20260213e"></script>
-  <script src="js/public-data-api.js?v=20260213e"></script>
+  <script src="js/mock-data.js?v=20260213f"></script>
+  <script src="js/shared.js?v=20260213f"></script>
+  <script src="js/map-engine.js?v=20260213f"></script>
+  <script src="js/route-algorithm.js?v=20260213f"></script>
+  <script src="js/demand-engine.js?v=20260213f"></script>
+  <script src="js/public-data-api.js?v=20260213f"></script>
 
   <script>
   /* ═══════════════════════════════════════════
@@ -893,7 +894,7 @@
   function drawInitialHotspots() {
     var hour = parseInt(document.getElementById('hourSelect').value) || new Date().getHours();
     var day = parseInt(document.getElementById('daySelect').value);
-    var weather = document.getElementById('weatherSelect').value;
+    var weather = 'clear';
     clearHotspotMarkers();
     HOTSPOTS.forEach(function(hs) {
       var score = calculateDemandScore(hs, hour, day, weather);
@@ -953,6 +954,10 @@
     }
   }
 
+  function onRadiusChange(val) {
+    document.getElementById('radiusLabel').textContent = val + 'km';
+  }
+
   function onMaxStopsChange(val) {
     document.getElementById('maxStopsLabel').textContent = val + '개';
   }
@@ -978,7 +983,7 @@
   function renderHotspotDetailList() {
     var hour = parseInt(document.getElementById('hourSelect').value) || new Date().getHours();
     var day = parseInt(document.getElementById('daySelect').value);
-    var weather = document.getElementById('weatherSelect').value;
+    var weather = 'clear';
     var scored = HOTSPOTS.map(function(hs) {
       return { name: hs.name, score: calculateDemandScore(hs, hour, day, weather), type: hs.type };
     });
@@ -1072,7 +1077,7 @@
 
     var hour = parseInt(document.getElementById('hourSelect').value);
     var day = parseInt(document.getElementById('daySelect').value);
-    var weather = document.getElementById('weatherSelect').value;
+    var weather = 'clear';
     var maxStops = parseInt(document.getElementById('maxStopsSlider').value);
 
     try {
@@ -1091,20 +1096,22 @@
         console.log('[한강 필터] 전체:', HOTSPOTS.length + '개 → 같은 쪽:', filteredHotspots.length + '개');
         updateHotspotCount(filteredHotspots.length, startSide);
       } else {
-        // 비서울: 출발지 5km 반경 내 핫스팟만 사용 (시내 순환 운행)
+        // 비서울: 출발지 반경 내 핫스팟만 사용 (슬라이더로 반경 조절)
+        var searchRadius = parseInt(document.getElementById('radiusSlider').value);
+        window.CUSTOM_SEARCH_RADIUS = searchRadius;
         var allWithDist = HOTSPOTS.map(function(hs) {
           return { hs: hs, dist: haversineDistance(currentStartPos.lat, currentStartPos.lng, hs.lat, hs.lng) };
         });
         allWithDist.sort(function(a, b) { return a.dist - b.dist; });
 
-        var nearby = allWithDist.filter(function(item) { return item.dist <= 5; });
+        var nearby = allWithDist.filter(function(item) { return item.dist <= searchRadius; });
         if (nearby.length >= 3) {
           filteredHotspots = nearby.map(function(item) { return item.hs; });
         } else {
           // 반경 내 핫스팟 부족 시 가까운 순 3개 확보
           filteredHotspots = allWithDist.slice(0, Math.max(3, nearby.length)).map(function(item) { return item.hs; });
         }
-        console.log('[반경 필터] ' + CITY_DATA[currentCity].name + ' 전체:', HOTSPOTS.length + '개 → 5km 내:', filteredHotspots.length + '개');
+        console.log('[반경 필터] ' + CITY_DATA[currentCity].name + ' 전체:', HOTSPOTS.length + '개 → ' + searchRadius + 'km 내:', filteredHotspots.length + '개');
         updateHotspotCount(filteredHotspots.length);
       }
 

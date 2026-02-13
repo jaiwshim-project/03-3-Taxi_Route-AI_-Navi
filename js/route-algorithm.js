@@ -279,7 +279,7 @@ function planEmptyCarRoute(currentPos, hotspots, hour, dayOfWeek, weather, maxSt
   // 1.5. 빈차 운행 반경 제한 — 출발지에서 너무 먼 핫스팟 제외
   // 빈차 택시가 승객을 찾으며 이동할 합리적 반경 (직선 15km ≈ 도로 ~20km)
   // 제주도처럼 한라산 넘어가거나, 비현실적인 장거리 공차 운행 방지
-  var MAX_SEARCH_RADIUS = 5; // km (직선거리) — 시내 순환 운행에 적합한 반경
+  var MAX_SEARCH_RADIUS = (typeof CUSTOM_SEARCH_RADIUS !== 'undefined') ? CUSTOM_SEARCH_RADIUS : 5;
   var nearbyScored = scored.filter(function(s) {
     return s.distFromStart <= MAX_SEARCH_RADIUS;
   });

@@ -533,33 +533,10 @@ function buildStatusLine(status, successFn, label) {
     ' <span class="text-gray-700">' + text + '</span></div>';
 }
 
-// 날씨 결과를 weatherSelect/weather-option에 자동 반영
+// 날씨 결과 반영 — UI에서 날씨 선택이 제거되었으므로 배지 표시만 유지
 function applyWeatherToSelect() {
-  if (!liveDataState.weather || liveDataState.weatherStatus !== 'success') return;
-  var code = liveDataState.weather.weatherCode;
-
-  // route-optimizer: select 드롭다운
-  var select = document.getElementById('weatherSelect');
-  if (select) {
-    select.value = code;
-    select.dispatchEvent(new Event('change', { bubbles: true }));
-  }
-
-  // heatmap: weather-option 카드
-  var options = document.querySelectorAll('.weather-option');
-  if (options.length > 0) {
-    options.forEach(function(opt) {
-      opt.classList.remove('active', 'ring-2', 'ring-amber-400', 'bg-amber-50');
-      if (opt.dataset.weather === code) {
-        opt.classList.add('active', 'ring-2', 'ring-amber-400', 'bg-amber-50');
-      }
-    });
-    // heatmap state 업데이트
-    if (typeof state !== 'undefined' && state.weather !== undefined) {
-      state.weather = code;
-      if (typeof updateAll === 'function') updateAll();
-    }
-  }
+  // 날씨 UI가 제거되어 더 이상 자동 반영 불필요
+  // 날씨 데이터는 liveDataState에 보관되며 배지에서만 표시
 }
 
 /* ── (G) 수요/시간 보정 함수 ── */
