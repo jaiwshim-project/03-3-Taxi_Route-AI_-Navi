@@ -673,12 +673,12 @@
   <div id="app-footer" class="hidden"></div>
 
   <!-- ═══ 스크립트 ═══ -->
-  <script src="js/mock-data.js?v=20260213f"></script>
-  <script src="js/shared.js?v=20260213f"></script>
-  <script src="js/map-engine.js?v=20260213f"></script>
-  <script src="js/route-algorithm.js?v=20260213f"></script>
-  <script src="js/demand-engine.js?v=20260213f"></script>
-  <script src="js/public-data-api.js?v=20260213f"></script>
+  <script src="js/mock-data.js?v=20260213g"></script>
+  <script src="js/shared.js?v=20260213g"></script>
+  <script src="js/map-engine.js?v=20260213g"></script>
+  <script src="js/route-algorithm.js?v=20260213g"></script>
+  <script src="js/demand-engine.js?v=20260213g"></script>
+  <script src="js/public-data-api.js?v=20260213g"></script>
 
   <script>
   /* ═══════════════════════════════════════════
@@ -895,12 +895,48 @@
     var hour = parseInt(document.getElementById('hourSelect').value) || new Date().getHours();
     var day = parseInt(document.getElementById('daySelect').value);
     var weather = 'clear';
+    var searchRadius = parseInt(document.getElementById('radiusSlider').value) || 5;
+    var maxStops = parseInt(document.getElementById('maxStopsSlider').value) || 6;
     clearHotspotMarkers();
-    HOTSPOTS.forEach(function(hs) {
-      var score = calculateDemandScore(hs, hour, day, weather);
-      var m = addHotspotMarker(map, hs, score);
+
+    // 서울은 한강 기준 필터, 비서울은 반경 필터
+    var visibleHotspots;
+    if (currentCity === 'seoul' && currentStartPos) {
+      var startSide = currentStartPos.side || getCoordRiverSide(currentStartPos.lat, currentStartPos.lng);
+      var northDistricts = ['종로구','중구','용산구','성동구','광진구','동대문구','중랑구','성북구','강북구','도봉구','노원구','은평구','서대문구','마포구'];
+      visibleHotspots = HOTSPOTS.filter(function(hs) {
+        var hsSide = northDistricts.indexOf(hs.district) !== -1 ? 'north' : 'south';
+        return hsSide === startSide;
+      });
+    } else if (currentStartPos) {
+      // 비서울: 반경 내 핫스팟만 표시
+      var scored = HOTSPOTS.map(function(hs) {
+        return { hs: hs, dist: haversineDistance(currentStartPos.lat, currentStartPos.lng, hs.lat, hs.lng) };
+      });
+      scored.sort(function(a, b) { return a.dist - b.dist; });
+      var nearby = scored.filter(function(s) { return s.dist <= searchRadius; });
+      if (nearby.length >= 3) {
+        visibleHotspots = nearby.map(function(s) { return s.hs; });
+      } else {
+        visibleHotspots = scored.slice(0, Math.max(3, nearby.length)).map(function(s) { return s.hs; });
+      }
+    } else {
+      visibleHotspots = HOTSPOTS;
+    }
+
+    // 수요 점수 계산 후 상위 maxStops개만 표시
+    var withScores = visibleHotspots.map(function(hs) {
+      return { hs: hs, score: calculateDemandScore(hs, hour, day, weather) };
+    });
+    withScores.sort(function(a, b) { return b.score - a.score; });
+    var displayList = withScores.slice(0, maxStops);
+
+    displayList.forEach(function(item) {
+      var m = addHotspotMarker(map, item.hs, item.score);
       hotspotMarkers.push(m);
     });
+
+    updateHotspotCount(displayList.length);
   }
 
   function clearHotspotMarkers() {
@@ -956,10 +992,12 @@
 
   function onRadiusChange(val) {
     document.getElementById('radiusLabel').textContent = val + 'km';
+    drawInitialHotspots();
   }
 
   function onMaxStopsChange(val) {
     document.getElementById('maxStopsLabel').textContent = val + '개';
+    drawInitialHotspots();
   }
 
   function toggleHotspotDetail() {
