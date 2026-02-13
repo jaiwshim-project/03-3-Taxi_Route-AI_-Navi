@@ -31,7 +31,12 @@
         <span class="w-8 h-8 bg-amber-100 rounded-lg flex items-center justify-center text-base">&#9881;</span>
         시뮬레이션 설정
       </h2>
-      <div class="grid sm:grid-cols-3 gap-6 items-end">
+      <div class="grid sm:grid-cols-4 gap-6 items-end">
+        <!-- 도시 선택 -->
+        <div>
+          <label class="block text-sm font-semibold text-gray-700 mb-2">도시 선택</label>
+          <div id="city-select-container"></div>
+        </div>
         <!-- 근무시간 슬라이더 -->
         <div>
           <label class="block text-sm font-semibold text-gray-700 mb-2">
@@ -134,6 +139,18 @@
      ═══════════════════════════════════════════ */
 
   initPage('simulation');
+
+  // 도시 선택 드롭다운 삽입
+  document.getElementById('city-select-container').innerHTML =
+    buildCitySelectHTML('simCitySelect', 'onSimCityChange(this.value)');
+
+  function onSimCityChange(cityKey) {
+    switchCity(cityKey);
+    // 결과가 보이는 상태면 자동 재실행
+    if (!document.getElementById('results-section').classList.contains('hidden')) {
+      runSimulation();
+    }
+  }
 
   /* ---------- 전략 메타 ---------- */
   var strategies = [

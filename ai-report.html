@@ -27,9 +27,12 @@
             <p class="text-amber-100 text-sm mt-0.5" id="report-date"></p>
           </div>
         </div>
-        <p class="text-amber-100 text-sm max-w-xl">택시내비AI가 서울시 택시 수요 데이터를 분석하여 생성한 맞춤형 운행 전략 리포트입니다. 데이터 기반 의사결정으로 수익을 극대화하세요.</p>
+        <p class="text-amber-100 text-sm max-w-xl" id="report-subtitle">택시내비AI가 택시 수요 데이터를 분석하여 생성한 맞춤형 운행 전략 리포트입니다. 데이터 기반 의사결정으로 수익을 극대화하세요.</p>
       </div>
-      <div class="flex gap-3">
+      <div class="flex gap-3 items-center">
+        <select id="reportCitySelect" onchange="onReportCityChange(this.value)"
+                class="rounded-lg bg-white/20 backdrop-blur border border-white/30 px-3 py-2 text-sm font-medium text-white outline-none cursor-pointer hover:bg-white/30 transition">
+        </select>
         <button onclick="window.print()" class="px-4 py-2 bg-white/20 backdrop-blur rounded-lg text-sm font-medium hover:bg-white/30 transition no-print">&#x1F5A8; 인쇄</button>
       </div>
     </div>
@@ -51,8 +54,31 @@
 <script src="js/shared.js"></script>
 <script src="js/demand-engine.js"></script>
 <script>
-(function() {
   initPage('report');
+
+  // 도시 선택 드롭다운 채우기
+  var reportCitySel = document.getElementById('reportCitySelect');
+  Object.keys(CITY_DATA).forEach(function(key) {
+    var opt = document.createElement('option');
+    opt.value = key;
+    opt.textContent = CITY_DATA[key].name;
+    if (key === 'seoul') opt.selected = true;
+    reportCitySel.appendChild(opt);
+  });
+
+  var currentReportCity = 'seoul';
+
+  function onReportCityChange(cityKey) {
+    currentReportCity = cityKey;
+    switchCity(cityKey);
+    document.getElementById('report-body').innerHTML =
+      '<div class="flex items-center justify-center py-20"><div class="spinner"></div><span class="ml-3 text-gray-500">AI 리포트 생성 중...</span></div>';
+    setTimeout(function() { generateReport(); }, 500);
+  }
+
+  generateReport();
+
+function generateReport() {
 
   var now = new Date();
   var hour = now.getHours();
@@ -60,7 +86,8 @@
   var weather = 'clear';
   var dayNames = ['일요일', '월요일', '화요일', '수요일', '목요일', '금요일', '토요일'];
   var dateStr = now.getFullYear() + '년 ' + (now.getMonth() + 1) + '월 ' + now.getDate() + '일 ' + dayNames[dow];
-  document.getElementById('report-date').textContent = dateStr + ' | 자동 생성 리포트';
+  var cityName = CITY_DATA[currentReportCity] ? CITY_DATA[currentReportCity].name : '서울특별시';
+  document.getElementById('report-date').textContent = dateStr + ' | ' + cityName + ' | 자동 생성 리포트';
 
   // 데이터 준비
   var districtDemand = aggregateDistrictDemand(hour, dow, weather);
@@ -124,7 +151,7 @@
         '</div>' +
         '<div class="bg-gray-50 rounded-xl p-4">' +
           '<p class="text-sm text-gray-700 leading-relaxed">' +
-            '&#x1F4A1; <strong>분석 요약:</strong> 오늘(' + dayNames[dow] + ') 서울시 전체 택시 수요는 <strong class="' + demandColor + '">' + demandLevel + '</strong> 수준으로 예측됩니다. ' +
+            '&#x1F4A1; <strong>분석 요약:</strong> 오늘(' + dayNames[dow] + ') ' + cityName + ' 전체 택시 수요는 <strong class="' + demandColor + '">' + demandLevel + '</strong> 수준으로 예측됩니다. ' +
             '<strong>' + topDistrict.name + '</strong> 지역이 평균 ' + topDistrict.avgScore + '점으로 가장 높은 수요를 보이며, ' +
             '핵심 거점은 <strong>' + (topDistrict.topSpot || '-') + '</strong>입니다. ' +
             'AI 최적화 운행 시 일일 순수익 약 <strong>' + fmtWon(dailySim.netIncome) + '</strong>이 예상됩니다.' +
@@ -425,7 +452,7 @@
 
     document.getElementById('report-body').innerHTML = sections.join('');
   }
-})();
+}
 </script>
 </body>
 </html>

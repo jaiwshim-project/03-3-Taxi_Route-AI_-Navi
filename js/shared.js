@@ -34,7 +34,7 @@ function renderHeader(active) {
     return '<a href="' + n.href + '" class="block px-3 py-2.5 rounded-lg text-sm ' + (isActive ? 'text-amber-600 bg-amber-50 font-semibold' : 'text-gray-700 hover:bg-gray-50') + '">' + n.label + '</a>';
   }).join('');
 
-  return '<header class="sticky top-0 z-50 backdrop-blur border-b border-sky-200" style="background:rgba(224,242,254,0.92);">' +
+  return '<header class="sticky top-0 z-50 backdrop-blur border-b border-sky-300" style="background:rgba(135,206,235,0.92);">' +
     '<div class="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">' +
     '<a href="index.html" class="flex items-center gap-2 shrink-0">' +
     '<div class="w-9 h-9 bg-amber-500 rounded-lg flex items-center justify-center text-lg">&#x1F695;</div>' +
@@ -97,6 +97,27 @@ function scoreBarHTML(label, score, maxScore) {
 /* ── 시간 포맷 ── */
 function formatHour(h) {
   return (h < 10 ? '0' : '') + h + ':00';
+}
+
+/* ── 도시 선택 드롭다운 HTML 생성 ── */
+function buildCitySelectHTML(selectId, onchangeFn) {
+  selectId = selectId || 'citySelect';
+  onchangeFn = onchangeFn || 'onCityChange(this.value)';
+  var options = Object.keys(CITY_DATA).map(function(key) {
+    return '<option value="' + key + '"' + (key === 'seoul' ? ' selected' : '') + '>' +
+      CITY_DATA[key].name + '</option>';
+  }).join('');
+  return '<select id="' + selectId + '" onchange="' + onchangeFn + '"' +
+    ' class="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm focus:ring-2 focus:ring-amber-400 focus:border-amber-400 outline-none bg-white">' +
+    options + '</select>';
+}
+
+/* ── 도시 변경 시 HOTSPOTS 업데이트 (공통) ── */
+function switchCity(cityKey) {
+  var city = CITY_DATA[cityKey];
+  if (!city) return null;
+  HOTSPOTS = city.hotspots;
+  return city;
 }
 
 function minutesToTimeStr(minutes) {

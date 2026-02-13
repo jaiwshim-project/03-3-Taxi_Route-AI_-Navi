@@ -401,27 +401,25 @@
       <!-- 스크롤 영역 -->
       <div class="route-left-scroll">
 
+        <!-- 섹션 0: 지역 선택 -->
+        <div class="setting-section" style="border-left: 3px solid #0ea5e9;">
+          <div class="setting-section-title text-sky-700">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064"/></svg>
+            지역 선택
+          </div>
+          <select id="citySelect" class="w-full px-3 py-2.5 bg-white border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-sky-500 focus:border-sky-500" onchange="onCityChange(this.value)">
+          </select>
+        </div>
+
         <!-- 섹션 1: 현재 위치 -->
         <div class="setting-section" style="border-left: 3px solid #f59e0b;">
           <div class="setting-section-title text-amber-700">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
-            현재 위치
+            출발 위치
           </div>
           <select id="startLocation" class="w-full text-sm border border-gray-200 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-amber-300 focus:border-amber-400 outline-none bg-white" onchange="onStartLocationChange()">
             <option value="">출발지를 선택하세요</option>
-            <option value="gangnam">강남역 (37.4979, 127.0276)</option>
-            <option value="seoul_station">서울역 (37.5547, 126.9707)</option>
-            <option value="hongdae">홍대입구역 (37.5571, 126.9246)</option>
-            <option value="jamsil">잠실역 (37.5133, 127.1000)</option>
-            <option value="yeouido">여의도 IFC (37.5252, 126.9256)</option>
-            <option value="gwanghwamun">광화문 (37.5759, 126.9769)</option>
-            <option value="gangnam_express">고속터미널 (37.5048, 127.0040)</option>
-            <option value="gimpo">김포공항 (37.5616, 126.8016)</option>
-            <option value="itaewon">이태원역 (37.5346, 126.9946)</option>
-            <option value="myeongdong">명동 (37.5636, 126.9850)</option>
-            <option value="sindorim">신도림역 (37.5088, 126.8912)</option>
-            <option value="guro_digital">구로디지털단지 (37.4853, 126.9016)</option>
-            <option value="map_select">&#x1F4CD; 지도에서 선택</option>
+            <option value="map_select">&#x1F4CD; 지도에서 직접 선택</option>
           </select>
           <div id="mapSelectHint" class="hidden mt-2 text-xs text-amber-600 flex items-center gap-1">
             <svg class="w-3 h-3 animate-pulse" fill="currentColor" viewBox="0 0 20 20"><circle cx="10" cy="10" r="10"/></svg>
@@ -603,7 +601,15 @@
       <!-- 지도 상단 배지 -->
       <div class="map-overlay-badge" style="top:12px; left:12px; display:flex; align-items:center; gap:6px;">
         <span class="w-2 h-2 rounded-full bg-green-500 animate-pulse-dot"></span>
-        <span class="text-gray-700">서울시 실시간 수요 분석</span>
+        <span class="text-gray-700" id="mapBadgeLabel">서울특별시 실시간 수요 분석</span>
+      </div>
+
+      <!-- 실시간 공공데이터 상태 배지 -->
+      <div id="liveDataBadge" class="map-overlay-badge" style="top:46px; left:12px; font-size:11px; display:flex; flex-direction:column; gap:3px; padding:8px 12px;">
+        <div class="flex items-center gap-1.5">
+          <span class="w-2 h-2 rounded-full bg-gray-300 inline-block"></span>
+          <span class="text-gray-500">실시간 데이터 연결 대기</span>
+        </div>
       </div>
 
       <!-- 범례 -->
@@ -671,6 +677,7 @@
   <script src="js/map-engine.js"></script>
   <script src="js/route-algorithm.js"></script>
   <script src="js/demand-engine.js"></script>
+  <script src="js/public-data-api.js"></script>
 
   <script>
   /* ═══════════════════════════════════════════
@@ -707,21 +714,82 @@
   /* 현재 선택된 경로 */
   var selectedRoute = null;
 
-  /* ── 출발 위치 데이터 맵 (side: 한강 기준 강북/강남) ── */
-  var START_LOCATIONS = {
-    gangnam:         { lat: 37.4979, lng: 127.0276, name: '강남역',         side: 'south' },
-    seoul_station:   { lat: 37.5547, lng: 126.9707, name: '서울역',         side: 'north' },
-    hongdae:         { lat: 37.5571, lng: 126.9246, name: '홍대입구역',     side: 'north' },
-    jamsil:          { lat: 37.5133, lng: 127.1000, name: '잠실역',         side: 'south' },
-    yeouido:         { lat: 37.5252, lng: 126.9256, name: '여의도 IFC',     side: 'south' },
-    gwanghwamun:     { lat: 37.5759, lng: 126.9769, name: '광화문',         side: 'north' },
-    gangnam_express: { lat: 37.5048, lng: 127.0040, name: '고속터미널',     side: 'south' },
-    gimpo:           { lat: 37.5616, lng: 126.8016, name: '김포공항',       side: 'south' },
-    itaewon:         { lat: 37.5346, lng: 126.9946, name: '이태원역',       side: 'north' },
-    myeongdong:      { lat: 37.5636, lng: 126.9850, name: '명동',           side: 'north' },
-    sindorim:        { lat: 37.5088, lng: 126.8912, name: '신도림역',       side: 'south' },
-    guro_digital:    { lat: 37.4853, lng: 126.9016, name: '구로디지털단지', side: 'south' }
-  };
+  /* ── 현재 선택 도시 ── */
+  var currentCity = 'seoul';  // default city
+
+  /* ── 도시 선택 초기화 ── */
+  function initCitySelect() {
+    var sel = document.getElementById('citySelect');
+    var keys = Object.keys(CITY_DATA);
+    keys.forEach(function(key) {
+      var opt = document.createElement('option');
+      opt.value = key;
+      opt.textContent = CITY_DATA[key].name;
+      if (key === 'seoul') opt.selected = true;
+      sel.appendChild(opt);
+    });
+    populateStartLocations(CITY_DATA.seoul);
+  }
+
+  function onCityChange(cityKey) {
+    currentCity = cityKey;
+    var city = CITY_DATA[cityKey];
+    if (!city) return;
+
+    // 핫스팟 교체
+    HOTSPOTS = city.hotspots;
+
+    // 지도 이동
+    map.setView(city.center, city.zoom);
+
+    // 출발지 드롭다운 갱신
+    populateStartLocations(city);
+
+    // 기존 경로/마커 초기화
+    clearAllRouteLayers();
+    if (startMarker) { map.removeLayer(startMarker); startMarker = null; }
+    currentStartPos = null;
+    document.getElementById('routeSelectArea').classList.add('hidden');
+    hideBottomPanel();
+
+    // 핫스팟 재표시
+    drawInitialHotspots();
+    updateHotspotCount();
+    renderHotspotDetailList();
+
+    // 배지 갱신
+    document.getElementById('mapBadgeLabel').textContent = city.name + ' 실시간 수요 분석';
+
+    // 실시간 데이터 재로딩 (새 도시의 날씨/교통)
+    if (typeof loadLiveData === 'function') {
+      loadLiveData(cityKey).then(function() {
+        if (typeof applyWeatherToSelect === 'function' &&
+            liveDataState && liveDataState.weatherStatus === 'success') {
+          applyWeatherToSelect();
+        }
+      }).catch(function() {});
+    }
+  }
+
+  function populateStartLocations(city) {
+    var sel = document.getElementById('startLocation');
+    sel.innerHTML = '<option value="">출발지를 선택하세요</option>';
+    if (city.startLocations) {
+      city.startLocations.forEach(function(loc) {
+        var opt = document.createElement('option');
+        opt.value = loc.key;
+        opt.textContent = loc.name + ' (' + loc.lat + ', ' + loc.lng + ')';
+        sel.appendChild(opt);
+      });
+    }
+    var mapOpt = document.createElement('option');
+    mapOpt.value = 'map_select';
+    mapOpt.innerHTML = '\uD83D\uDCCD 지도에서 직접 선택';
+    sel.appendChild(mapOpt);
+
+    document.getElementById('mapSelectHint').classList.add('hidden');
+    document.getElementById('selectedPosInfo').classList.add('hidden');
+  }
 
   /* ── 좌표로 한강 남/북 판별 (구간별 근사선) ── */
   function getCoordRiverSide(lat, lng) {
@@ -755,12 +823,20 @@
   /* ═══ 초기화 ═══ */
   document.addEventListener('DOMContentLoaded', function() {
     initPage('route');
+    initCitySelect();
     initHourSelect();
     initMapInstance();
     drawInitialHotspots();
     updateHotspotCount();
     renderHotspotDetailList();
     setCurrentTimeDefaults();
+
+    // 실시간 공공데이터 로딩 (비동기, 실패해도 기존 기능 유지)
+    if (typeof initLiveData === 'function') {
+      initLiveData().catch(function(e) {
+        console.warn('[실시간] 초기화 실패, mock 데이터로 운영:', e);
+      });
+    }
   });
 
   function initHourSelect() {
@@ -780,20 +856,21 @@
   }
 
   function initMapInstance() {
-    map = initMap('routeMap', [37.5500, 126.9900], 12);
+    var city = CITY_DATA[currentCity] || CITY_DATA.seoul;
+    map = initMap('routeMap', city.center, city.zoom);
     map.on('click', function(e) {
       if (!isMapSelectMode) return;
       var lat = Math.round(e.latlng.lat * 10000) / 10000;
       var lng = Math.round(e.latlng.lng * 10000) / 10000;
-      var clickSide = getCoordRiverSide(lat, lng);
+      var clickSide = (currentCity === 'seoul') ? getCoordRiverSide(lat, lng) : '';
       currentStartPos = { lat: lat, lng: lng, name: '사용자 지정 (' + lat + ', ' + lng + ')', side: clickSide };
       placeStartMarker(lat, lng);
       isMapSelectMode = false;
       document.getElementById('mapSelectHint').classList.add('hidden');
       document.getElementById('selectedPosInfo').classList.remove('hidden');
+      var sideText = clickSide ? ' <span class="text-xs text-gray-400">(' + (clickSide === 'north' ? '강북' : '강남') + ')</span>' : '';
       document.getElementById('selectedPosInfo').innerHTML =
-        '<span class="font-semibold text-amber-700">&#x1F4CC; 선택 위치:</span> ' + lat + ', ' + lng +
-        ' <span class="text-xs text-gray-400">(' + (clickSide === 'north' ? '강북' : '강남') + ')</span>';
+        '<span class="font-semibold text-amber-700">&#x1F4CC; 선택 위치:</span> ' + lat + ', ' + lng + sideText;
       map.getContainer().style.cursor = '';
     });
   }
@@ -849,9 +926,17 @@
       return;
     }
 
-    if (val && START_LOCATIONS[val]) {
-      var loc = START_LOCATIONS[val];
-      currentStartPos = { lat: loc.lat, lng: loc.lng, name: loc.name, side: loc.side };
+    // 현재 도시의 출발지 목록에서 찾기
+    var city = CITY_DATA[currentCity];
+    var loc = null;
+    if (city && city.startLocations) {
+      for (var i = 0; i < city.startLocations.length; i++) {
+        if (city.startLocations[i].key === val) { loc = city.startLocations[i]; break; }
+      }
+    }
+
+    if (loc) {
+      currentStartPos = { lat: loc.lat, lng: loc.lng, name: loc.name, side: loc.side || '' };
       placeStartMarker(loc.lat, loc.lng);
     } else {
       currentStartPos = null;
@@ -982,23 +1067,29 @@
     var maxStops = parseInt(document.getElementById('maxStopsSlider').value);
 
     try {
-      // 단계 0: 한강 기준 같은 쪽 핫스팟만 필터링 (다리 건너기 방지)
-      // 드롭다운 선택시 정확한 side 값 사용, 지도 클릭시 좌표 기반 판별
-      var startSide = currentStartPos.side || getCoordRiverSide(currentStartPos.lat, currentStartPos.lng);
+      // 단계 0: 한강 기준 같은 쪽 핫스팟만 필터링 (서울 전용)
+      var filteredHotspots;
+      var startSide = '';
 
-      var northDistricts = ['종로구','중구','용산구','성동구','광진구','동대문구','중랑구','성북구','강북구','도봉구','노원구','은평구','서대문구','마포구'];
-      var filteredHotspots = HOTSPOTS.filter(function(hs) {
-        var hsSide = northDistricts.indexOf(hs.district) !== -1 ? 'north' : 'south';
-        return hsSide === startSide;
-      });
-
-      console.log('[한강 필터] 출발지:', currentStartPos.name, '| 판별:', startSide === 'north' ? '강북' : '강남');
-      console.log('[한강 필터] 전체:', HOTSPOTS.length + '개 → 같은 쪽:', filteredHotspots.length + '개');
-
-      updateHotspotCount(filteredHotspots.length, startSide);
+      if (currentCity === 'seoul') {
+        startSide = currentStartPos.side || getCoordRiverSide(currentStartPos.lat, currentStartPos.lng);
+        var northDistricts = ['종로구','중구','용산구','성동구','광진구','동대문구','중랑구','성북구','강북구','도봉구','노원구','은평구','서대문구','마포구'];
+        filteredHotspots = HOTSPOTS.filter(function(hs) {
+          var hsSide = northDistricts.indexOf(hs.district) !== -1 ? 'north' : 'south';
+          return hsSide === startSide;
+        });
+        console.log('[한강 필터] 출발지:', currentStartPos.name, '| 판별:', startSide === 'north' ? '강북' : '강남');
+        console.log('[한강 필터] 전체:', HOTSPOTS.length + '개 → 같은 쪽:', filteredHotspots.length + '개');
+        updateHotspotCount(filteredHotspots.length, startSide);
+      } else {
+        filteredHotspots = HOTSPOTS.slice();
+        console.log('[도시] ' + CITY_DATA[currentCity].name + ' 핫스팟:', filteredHotspots.length + '개');
+        updateHotspotCount();
+      }
 
       // 단계 1: 수요 분석
-      updateLoadingStatus('수요 점수 계산 중...', filteredHotspots.length + '개 핫스팟 (' + (startSide === 'north' ? '강북' : '강남') + ') × 3가지 전략');
+      var regionLabel = (currentCity === 'seoul' && startSide) ? (startSide === 'north' ? '강북' : '강남') : CITY_DATA[currentCity].name;
+      updateLoadingStatus('수요 점수 계산 중...', filteredHotspots.length + '개 핫스팟 (' + regionLabel + ') × 3가지 전략');
       await sleep(500);
 
       // 단계 2: 3개 경로 계산 (필터링된 핫스팟만 사용)
@@ -1031,6 +1122,19 @@
         });
       });
       await Promise.all(osrmPromises);
+
+      // 단계 3.5: 실시간 교통 혼잡도에 의한 시간 보정
+      if (typeof adjustRouteTimeByTraffic === 'function' && typeof liveDataState !== 'undefined' &&
+          liveDataState.trafficStatus === 'success') {
+        updateLoadingStatus('실시간 교통 상황 반영 중...', liveDataState.traffic.avgSpeed + 'km/h (' +
+          (CONGESTION_NAMES[liveDataState.traffic.congestionLevel] || '보통') + ')');
+        await sleep(200);
+        ROUTE_KEYS.forEach(function(key) {
+          if (routeResults[key]) {
+            routeResults[key].estimatedTime = adjustRouteTimeByTraffic(routeResults[key].estimatedTime);
+          }
+        });
+      }
 
       // 단계 4: 일정 계산
       updateLoadingStatus('경로 일정 생성 중...', '3개 경로 도착 시간 계산');
