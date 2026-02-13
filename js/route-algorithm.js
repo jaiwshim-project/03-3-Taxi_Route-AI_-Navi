@@ -292,51 +292,29 @@ function planEmptyCarRoute(currentPos, hotspots, hour, dayOfWeek, weather, maxSt
   }
 
   // 2. 전략별 핫스팟 선택 (후보 풀 구성)
-  // 핫스팟이 적은 도시(지방)에서도 경로가 차별화되도록:
-  //  (a) 방문 수를 자동 축소 — 전체의 50%만 방문하여 전략 간 차이 극대화
-  //  (b) 후보 풀을 전략별로 다르게 구성 — 수요/거리/균형 각각 다른 부분집합
-  var isSmallPool = scored.length <= maxStops * 2;
-
-  if (isSmallPool && scored.length > 3) {
-    // 핫스팟 10개 + maxStops 8 → maxStops 5로 축소 (50%만 방문)
-    maxStops = Math.min(maxStops, Math.max(3, Math.ceil(scored.length * 0.5)));
-  }
-
+  // 후보 풀을 전략별로 다르게 구성하여 경로 차별화
+  var candidateCount = Math.min(maxStops * 2, scored.length);
   var topSpots;
 
   if (priority === 'demand') {
-    // 수요 우선: 수요 점수 상위 65%만 후보로 사용 (저수요 제외)
+    // 수요 우선: 수요 점수 상위 순
     scored.sort(function(a, b) { return b.score - a.score; });
-    if (isSmallPool) {
-      var demandCut = Math.max(maxStops, Math.ceil(scored.length * 0.65));
-      topSpots = scored.slice(0, demandCut);
-    } else {
-      topSpots = scored.slice(0, Math.min(maxStops * 2, scored.length));
-    }
+    topSpots = scored.slice(0, candidateCount);
 
   } else if (priority === 'distance') {
-    // 거리 우선: 가까운 순 65%만 후보로 사용 (원거리 제외)
+    // 거리 우선: 가까운 순 (최소 수요 30 이상)
     var filtered = scored.filter(function(s) { return s.score >= 30; });
     if (filtered.length < maxStops) filtered = scored.slice();
     filtered.sort(function(a, b) { return a.distFromStart - b.distFromStart; });
-    if (isSmallPool) {
-      var distCut = Math.max(maxStops, Math.ceil(filtered.length * 0.65));
-      topSpots = filtered.slice(0, distCut);
-    } else {
-      topSpots = filtered.slice(0, Math.min(maxStops * 2, filtered.length));
-    }
+    topSpots = filtered.slice(0, Math.min(candidateCount, filtered.length));
 
   } else {
-    // 균형: 종합 가치 기준, 전체 후보 사용 (알고리즘이 차별화)
+    // 균형: 종합 가치 기준 (수요/거리 비율)
     scored.forEach(function(s) {
       s.combinedValue = s.score / Math.sqrt(s.distFromStart + 0.5);
     });
     scored.sort(function(a, b) { return b.combinedValue - a.combinedValue; });
-    if (isSmallPool) {
-      topSpots = scored.slice(0, scored.length);
-    } else {
-      topSpots = scored.slice(0, Math.min(maxStops * 2, scored.length));
-    }
+    topSpots = scored.slice(0, candidateCount);
   }
 
   // 3. 경로 포인트 구성 (출발지 = index 0)

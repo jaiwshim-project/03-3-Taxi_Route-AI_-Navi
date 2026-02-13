@@ -672,12 +672,12 @@
   <div id="app-footer" class="hidden"></div>
 
   <!-- ═══ 스크립트 ═══ -->
-  <script src="js/mock-data.js?v=20260213c"></script>
-  <script src="js/shared.js?v=20260213c"></script>
-  <script src="js/map-engine.js?v=20260213c"></script>
-  <script src="js/route-algorithm.js?v=20260213c"></script>
-  <script src="js/demand-engine.js?v=20260213c"></script>
-  <script src="js/public-data-api.js?v=20260213c"></script>
+  <script src="js/mock-data.js?v=20260213d"></script>
+  <script src="js/shared.js?v=20260213d"></script>
+  <script src="js/map-engine.js?v=20260213d"></script>
+  <script src="js/route-algorithm.js?v=20260213d"></script>
+  <script src="js/demand-engine.js?v=20260213d"></script>
+  <script src="js/public-data-api.js?v=20260213d"></script>
 
   <script>
   /* ═══════════════════════════════════════════
@@ -1163,9 +1163,9 @@
       });
       await Promise.all(osrmPromises);
 
-      // 단계 3.3: OSRM 도로 거리를 5~15km 범위로 조정
-      // 빈차 운행 적정 거리: 최소 5km(너무 짧으면 비효율), 최대 15km(시내 벗어남 방지)
-      var MIN_ROUTE_ROAD_DISTANCE = 5; // km
+      // 단계 3.3: OSRM 도로 거리를 10~15km 범위로 조정
+      // 빈차 운행 적정 거리: 최소 10km, 최대 15km
+      var MIN_ROUTE_ROAD_DISTANCE = 10; // km
       var MAX_ROUTE_ROAD_DISTANCE = 15; // km
       var tooLong = false, tooShort = false;
       ROUTE_KEYS.forEach(function(key) {
@@ -1173,15 +1173,15 @@
         if (routeResults[key] && routeResults[key].totalDistance < MIN_ROUTE_ROAD_DISTANCE) tooShort = true;
       });
 
-      // 최대 2회 재조정 루프
-      for (var adjustLoop = 0; adjustLoop < 2 && (tooLong || tooShort); adjustLoop++) {
+      // 최대 3회 재조정 루프 (방문지 수 ±3씩 조정)
+      for (var adjustLoop = 0; adjustLoop < 3 && (tooLong || tooShort); adjustLoop++) {
         var adjustedStops = maxStops;
         if (tooLong && adjustedStops > 3) {
-          adjustedStops = Math.max(3, adjustedStops - 2);
+          adjustedStops = Math.max(3, adjustedStops - 3);
           console.log('[거리 조정] ' + (adjustLoop+1) + '차: 15km 초과 → maxStops ' + maxStops + ' → ' + adjustedStops);
           updateLoadingStatus('경로 거리 초과, 재최적화 중...', '방문지 ' + adjustedStops + '개로 축소');
         } else if (tooShort && adjustedStops < filteredHotspots.length) {
-          adjustedStops = Math.min(filteredHotspots.length, adjustedStops + 2);
+          adjustedStops = Math.min(filteredHotspots.length, adjustedStops + 3);
           console.log('[거리 조정] ' + (adjustLoop+1) + '차: 10km 미만 → maxStops ' + maxStops + ' → ' + adjustedStops);
           updateLoadingStatus('경로 거리 부족, 재최적화 중...', '방문지 ' + adjustedStops + '개로 확대');
         } else {
