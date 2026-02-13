@@ -672,12 +672,12 @@
   <div id="app-footer" class="hidden"></div>
 
   <!-- ═══ 스크립트 ═══ -->
-  <script src="js/mock-data.js?v=20260213"></script>
-  <script src="js/shared.js?v=20260213"></script>
-  <script src="js/map-engine.js?v=20260213"></script>
-  <script src="js/route-algorithm.js?v=20260213"></script>
-  <script src="js/demand-engine.js?v=20260213"></script>
-  <script src="js/public-data-api.js?v=20260213"></script>
+  <script src="js/mock-data.js?v=20260213b"></script>
+  <script src="js/shared.js?v=20260213b"></script>
+  <script src="js/map-engine.js?v=20260213b"></script>
+  <script src="js/route-algorithm.js?v=20260213b"></script>
+  <script src="js/demand-engine.js?v=20260213b"></script>
+  <script src="js/public-data-api.js?v=20260213b"></script>
 
   <script>
   /* ═══════════════════════════════════════════
@@ -1114,17 +1114,36 @@
       await sleep(500);
 
       // 단계 2: 3개 경로 계산 (필터링된 핫스팟만 사용)
+      // 2-1. 수요 우선 (1번)
       updateLoadingStatus('1번 수요 우선 경로 탐색 중...', '수요² 가중 NN + 수요 2-opt');
       await sleep(300);
       routeResults.demand = planEmptyCarRoute(currentStartPos, filteredHotspots, hour, day, weather, maxStops, 'demand');
 
-      updateLoadingStatus('2번 균형 경로 탐색 중...', '종합 가치 NN + 균형 2-opt');
-      await sleep(300);
-      routeResults.balanced = planEmptyCarRoute(currentStartPos, filteredHotspots, hour, day, weather, maxStops, 'balanced');
-
+      // 2-2. 거리 우선 (3번)
       updateLoadingStatus('3번 거리 우선 경로 탐색 중...', '순수 거리 NN + 거리 2-opt');
       await sleep(300);
       routeResults.distance = planEmptyCarRoute(currentStartPos, filteredHotspots, hour, day, weather, maxStops, 'distance');
+
+      // 2-3. 균형 (2번) — 1번과 3번 경로의 핫스팟을 합쳐서 생성
+      updateLoadingStatus('2번 균형 경로 탐색 중...', '1번+3번 핫스팟 혼합 → 균형 최적화');
+      await sleep(300);
+      var demandStopNames = {};
+      var distStopNames = {};
+      var balancedPool = [];
+      routeResults.demand.route.forEach(function(r) { if (r.type === 'hotspot') demandStopNames[r.name] = true; });
+      routeResults.distance.route.forEach(function(r) { if (r.type === 'hotspot') distStopNames[r.name] = true; });
+      // 1번+3번 핫스팟 합집합으로 균형 후보 풀 구성
+      var seenBalanced = {};
+      filteredHotspots.forEach(function(hs) {
+        if ((demandStopNames[hs.name] || distStopNames[hs.name]) && !seenBalanced[hs.name]) {
+          seenBalanced[hs.name] = true;
+          balancedPool.push(hs);
+        }
+      });
+      // 합집합이 너무 적으면 전체 핫스팟 사용
+      if (balancedPool.length < 3) balancedPool = filteredHotspots;
+      console.log('[균형] 1번 핫스팟:', Object.keys(demandStopNames).length + '개, 3번:', Object.keys(distStopNames).length + '개 → 합집합:', balancedPool.length + '개');
+      routeResults.balanced = planEmptyCarRoute(currentStartPos, balancedPool, hour, day, weather, maxStops, 'balanced');
 
       // 단계 3: OSRM 도로 매칭 (구간별 라우팅으로 다리 건너기 방지)
       updateLoadingStatus('도로 경로 매칭 중...', 'OSRM 서버 구간별 조회');
@@ -1144,24 +1163,47 @@
       });
       await Promise.all(osrmPromises);
 
-      // 단계 3.3: OSRM 도로 거리 초과 시 경로 축소 (시내 운행 보장)
-      // 빈차 운행은 시내 위주여야 하므로 총 도로 거리 20km 초과 시 maxStops 줄여서 재계산
-      var MAX_ROUTE_ROAD_DISTANCE = 20; // km (도로 거리 기준)
-      var needRecompute = false;
+      // 단계 3.3: OSRM 도로 거리를 10~15km 범위로 조정
+      // 빈차 운행 적정 거리: 최소 10km(너무 짧으면 비효율), 최대 15km(시내 벗어남 방지)
+      var MIN_ROUTE_ROAD_DISTANCE = 10; // km
+      var MAX_ROUTE_ROAD_DISTANCE = 15; // km
+      var tooLong = false, tooShort = false;
       ROUTE_KEYS.forEach(function(key) {
-        if (routeResults[key] && routeResults[key].totalDistance > MAX_ROUTE_ROAD_DISTANCE) {
-          needRecompute = true;
-        }
+        if (routeResults[key] && routeResults[key].totalDistance > MAX_ROUTE_ROAD_DISTANCE) tooLong = true;
+        if (routeResults[key] && routeResults[key].totalDistance < MIN_ROUTE_ROAD_DISTANCE) tooShort = true;
       });
-      if (needRecompute && maxStops > 3) {
-        var reducedStops = Math.max(3, maxStops - 2);
-        console.log('[거리 초과] OSRM 도로 거리 20km 초과 → maxStops ' + maxStops + ' → ' + reducedStops + '로 재계산');
-        updateLoadingStatus('경로 거리 초과, 재최적화 중...', '방문지 ' + reducedStops + '개로 축소');
+
+      // 최대 2회 재조정 루프
+      for (var adjustLoop = 0; adjustLoop < 2 && (tooLong || tooShort); adjustLoop++) {
+        var adjustedStops = maxStops;
+        if (tooLong && adjustedStops > 3) {
+          adjustedStops = Math.max(3, adjustedStops - 2);
+          console.log('[거리 조정] ' + (adjustLoop+1) + '차: 15km 초과 → maxStops ' + maxStops + ' → ' + adjustedStops);
+          updateLoadingStatus('경로 거리 초과, 재최적화 중...', '방문지 ' + adjustedStops + '개로 축소');
+        } else if (tooShort && adjustedStops < filteredHotspots.length) {
+          adjustedStops = Math.min(filteredHotspots.length, adjustedStops + 2);
+          console.log('[거리 조정] ' + (adjustLoop+1) + '차: 10km 미만 → maxStops ' + maxStops + ' → ' + adjustedStops);
+          updateLoadingStatus('경로 거리 부족, 재최적화 중...', '방문지 ' + adjustedStops + '개로 확대');
+        } else {
+          break; // 조정 불가
+        }
+        maxStops = adjustedStops;
         await sleep(300);
 
-        routeResults.demand = planEmptyCarRoute(currentStartPos, filteredHotspots, hour, day, weather, reducedStops, 'demand');
-        routeResults.balanced = planEmptyCarRoute(currentStartPos, filteredHotspots, hour, day, weather, reducedStops, 'balanced');
-        routeResults.distance = planEmptyCarRoute(currentStartPos, filteredHotspots, hour, day, weather, reducedStops, 'distance');
+        routeResults.demand = planEmptyCarRoute(currentStartPos, filteredHotspots, hour, day, weather, maxStops, 'demand');
+        routeResults.distance = planEmptyCarRoute(currentStartPos, filteredHotspots, hour, day, weather, maxStops, 'distance');
+        // 균형: 1번+3번 합집합 재구성
+        var reDemandNames = {}, reDistNames = {}, reBalPool = [], reSeen = {};
+        routeResults.demand.route.forEach(function(r) { if (r.type === 'hotspot') reDemandNames[r.name] = true; });
+        routeResults.distance.route.forEach(function(r) { if (r.type === 'hotspot') reDistNames[r.name] = true; });
+        filteredHotspots.forEach(function(hs) {
+          if ((reDemandNames[hs.name] || reDistNames[hs.name]) && !reSeen[hs.name]) {
+            reSeen[hs.name] = true;
+            reBalPool.push(hs);
+          }
+        });
+        if (reBalPool.length < 3) reBalPool = filteredHotspots;
+        routeResults.balanced = planEmptyCarRoute(currentStartPos, reBalPool, hour, day, weather, maxStops, 'balanced');
 
         // OSRM 재조회
         var reOsrmPromises = ROUTE_KEYS.map(function(key) {
@@ -1176,6 +1218,13 @@
           });
         });
         await Promise.all(reOsrmPromises);
+
+        // 재확인
+        tooLong = false; tooShort = false;
+        ROUTE_KEYS.forEach(function(key) {
+          if (routeResults[key] && routeResults[key].totalDistance > MAX_ROUTE_ROAD_DISTANCE) tooLong = true;
+          if (routeResults[key] && routeResults[key].totalDistance < MIN_ROUTE_ROAD_DISTANCE) tooShort = true;
+        });
       }
 
       // 단계 3.5: 실시간 교통 혼잡도에 의한 시간 보정
