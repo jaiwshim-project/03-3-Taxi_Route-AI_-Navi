@@ -673,12 +673,12 @@
   <div id="app-footer" class="hidden"></div>
 
   <!-- ═══ 스크립트 ═══ -->
-  <script src="js/mock-data.js?v=20260213g"></script>
-  <script src="js/shared.js?v=20260213g"></script>
-  <script src="js/map-engine.js?v=20260213g"></script>
-  <script src="js/route-algorithm.js?v=20260213g"></script>
-  <script src="js/demand-engine.js?v=20260213g"></script>
-  <script src="js/public-data-api.js?v=20260213g"></script>
+  <script src="js/mock-data.js?v=20260213h"></script>
+  <script src="js/shared.js?v=20260213h"></script>
+  <script src="js/map-engine.js?v=20260213h"></script>
+  <script src="js/route-algorithm.js?v=20260213h"></script>
+  <script src="js/demand-engine.js?v=20260213h"></script>
+  <script src="js/public-data-api.js?v=20260213h"></script>
 
   <script>
   /* ═══════════════════════════════════════════
@@ -882,6 +882,7 @@
       document.getElementById('selectedPosInfo').innerHTML =
         '<span class="font-semibold text-amber-700">&#x1F4CC; 선택 위치:</span> ' + lat + ', ' + lng + sideText;
       map.getContainer().style.cursor = '';
+      drawInitialHotspots();
     });
   }
 
@@ -988,6 +989,7 @@
       currentStartPos = null;
       if (startMarker) { map.removeLayer(startMarker); startMarker = null; }
     }
+    drawInitialHotspots();
   }
 
   function onRadiusChange(val) {
