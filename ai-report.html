@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AI 전략 리포트 — 택시내비AI</title>
+  <title>AI 전략 리포트 — 택시빈차내비AI</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/variable/pretendardvariable.min.css">
   <link rel="stylesheet" href="css/custom.css">
@@ -27,7 +27,7 @@
             <p class="text-amber-100 text-sm mt-0.5" id="report-date"></p>
           </div>
         </div>
-        <p class="text-amber-100 text-sm max-w-xl" id="report-subtitle">택시내비AI가 택시 수요 데이터를 분석하여 생성한 맞춤형 운행 전략 리포트입니다. 데이터 기반 의사결정으로 수익을 극대화하세요.</p>
+        <p class="text-amber-100 text-sm max-w-xl" id="report-subtitle">택시빈차내비AI가 택시 수요 데이터를 분석하여 생성한 맞춤형 운행 전략 리포트입니다. 데이터 기반 의사결정으로 수익을 극대화하세요.</p>
       </div>
       <div class="flex gap-3 items-center">
         <select id="reportCitySelect" onchange="onReportCityChange(this.value)"
@@ -445,7 +445,7 @@ function generateReport() {
     /* ── 리포트 푸터 ── */
     sections.push(
       '<div class="text-center py-6 text-sm text-gray-400">' +
-        '<p>본 리포트는 택시내비AI의 수요 예측 엔진이 자동 생성하였습니다.</p>' +
+        '<p>본 리포트는 택시빈차내비AI의 수요 예측 엔진이 자동 생성하였습니다.</p>' +
         '<p class="mt-1">데이터 기준: ' + dateStr + ' ' + formatHour(hour) + ' | 날씨 조건: 맑음 | 분석 핫스팟: ' + HOTSPOTS.length + '개</p>' +
       '</div>'
     );

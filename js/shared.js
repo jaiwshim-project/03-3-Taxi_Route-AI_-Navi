@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════
-   택시내비AI — shared.js (공통 유틸·헤더·푸터)
+   택시빈차내비AI — shared.js (공통 유틸·헤더·푸터)
    ═══════════════════════════════════════════ */
 
 /* ── 유틸리티 ── */
@@ -38,7 +38,7 @@ function renderHeader(active) {
     '<div class="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">' +
     '<a href="index.html" class="flex items-center gap-2 shrink-0">' +
     '<div class="w-9 h-9 bg-amber-500 rounded-lg flex items-center justify-center text-lg">&#x1F695;</div>' +
-    '<span class="font-bold text-lg text-gray-900">택시내비<span class="text-amber-600">AI</span></span>' +
+    '<span class="font-bold text-lg text-gray-900">택시빈차내비<span class="text-amber-600">AI</span></span>' +
     '<span class="text-gray-600 hidden sm:inline" style="font-size:0.7em; margin-left:8px;">빈차 운행경로 최적화 AI 맵</span></a>' +
     '<nav class="hidden xl:flex items-center gap-1">' + navLinks + '</nav>' +
     '<button id="mobile-toggle" class="xl:hidden p-2 text-gray-700 hover:bg-gray-100 rounded-lg" onclick="toggleMobileMenu()">' +
@@ -57,8 +57,8 @@ function renderFooter() {
   return '<footer class="bg-gray-900 text-gray-400 py-16">' +
     '<div class="max-w-7xl mx-auto px-6">' +
     '<div class="grid md:grid-cols-4 gap-10">' +
-    '<div><div class="flex items-center gap-2 mb-4"><div class="w-8 h-8 bg-amber-500 rounded-lg flex items-center justify-center text-lg">&#x1F695;</div><span class="text-white font-bold">택시내비AI</span></div>' +
-    '<p class="text-sm leading-relaxed">데이터 기반 AI 택시 운행 최적화 플랫폼.<br>빈차 시간을 줄이고 수익을 극대화합니다.</p></div>' +
+    '<div><div class="flex items-center gap-2 mb-4"><div class="w-8 h-8 bg-amber-500 rounded-lg flex items-center justify-center text-lg">&#x1F695;</div><span class="text-white font-bold">택시빈차내비AI</span></div>' +
+    '<p class="text-sm leading-relaxed">데이터 기반 AI 택시 빈차운행 최적화 플랫폼.<br>빈차 시간을 줄이고 수익을 극대화합니다.</p></div>' +
     '<div><h4 class="text-white font-semibold mb-4">솔루션</h4>' +
     '<ul class="space-y-2 text-sm"><li><a href="heatmap.html" class="hover:text-white transition">수요 히트맵</a></li><li><a href="route-optimizer.html" class="hover:text-white transition">경로 최적화</a></li><li><a href="simulation.html" class="hover:text-white transition">시뮬레이션</a></li><li><a href="statistics.html" class="hover:text-white transition">수익 통계</a></li></ul></div>' +
     '<div><h4 class="text-white font-semibold mb-4">정보</h4>' +
@@ -67,7 +67,7 @@ function renderFooter() {
     '<ul class="space-y-2 text-sm"><li>전화: 010-2397-5734</li><li>이메일: jaiwshim@gmail.com</li><li>운영: 평일 09:00~18:00</li></ul></div>' +
     '</div>' +
     '<div class="border-t border-gray-800 mt-12 pt-8 flex flex-col md:flex-row justify-between items-center gap-4 text-sm">' +
-    '<p>&copy; 2026 택시내비AI. Jaiwoo Shim &nbsp; All rights reserved.</p>' +
+    '<p>&copy; 2026 택시빈차내비AI. Jaiwoo Shim &nbsp; All rights reserved.</p>' +
     '<p>빈차 시간을 0에 가깝게</p></div></div></footer>';
 }
 

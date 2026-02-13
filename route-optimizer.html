@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>경로 최적화 | 택시내비AI</title>
+  <title>경로 최적화 | 택시빈차내비AI</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
@@ -681,12 +681,12 @@
   <div id="app-footer" class="hidden"></div>
 
   <!-- ═══ 스크립트 ═══ -->
-  <script src="js/mock-data.js?v=20260213i"></script>
-  <script src="js/shared.js?v=20260213i"></script>
-  <script src="js/map-engine.js?v=20260213i"></script>
-  <script src="js/route-algorithm.js?v=20260213i"></script>
-  <script src="js/demand-engine.js?v=20260213i"></script>
-  <script src="js/public-data-api.js?v=20260213i"></script>
+  <script src="js/mock-data.js?v=20260213j"></script>
+  <script src="js/shared.js?v=20260213j"></script>
+  <script src="js/map-engine.js?v=20260213j"></script>
+  <script src="js/route-algorithm.js?v=20260213j"></script>
+  <script src="js/demand-engine.js?v=20260213j"></script>
+  <script src="js/public-data-api.js?v=20260213j"></script>
 
   <script>
   /* ═══════════════════════════════════════════
@@ -828,6 +828,18 @@
     return lat > riverLat ? 'north' : 'south';
   }
 
+  /* ── 강 건너기 방지 (전국 공통) ── */
+  function isSameRiverSide(city, startLat, startLng, hsLat, hsLng) {
+    var cityData = CITY_DATA[city];
+    if (!cityData || !cityData.riverCheck) return true;
+    var rc = cityData.riverCheck;
+    if (rc.axis === 'lat') {
+      return (startLat > rc.value) === (hsLat > rc.value);
+    } else {
+      return (startLng > rc.value) === (hsLng > rc.value);
+    }
+  }
+
   /* ── 유틸 ── */
   function sleep(ms) {
     return new Promise(function(resolve) { setTimeout(resolve, ms); });
@@ -918,9 +930,13 @@
         return hsSide === startSide;
       });
     } else if (currentStartPos) {
-      // 비서울: 반경 내 핫스팟만 표시
+      // 비서울: 반경 내 핫스팟 + 강 건너기 방지
       var scored = HOTSPOTS.map(function(hs) {
         return { hs: hs, dist: haversineDistance(currentStartPos.lat, currentStartPos.lng, hs.lat, hs.lng) };
+      });
+      // 강 건너기 방지 필터
+      scored = scored.filter(function(s) {
+        return isSameRiverSide(currentCity, currentStartPos.lat, currentStartPos.lng, s.hs.lat, s.hs.lng);
       });
       scored.sort(function(a, b) { return a.dist - b.dist; });
       var nearby = scored.filter(function(s) { return s.dist <= searchRadius; });
@@ -1068,15 +1084,32 @@
       try {
         var result = await getOSRMRoute(segment);
         if (result && result.geometry && result.geometry.length > 0) {
-          // 한강 건너는 구간 감지: 시작점/끝점과 다른 쪽 좌표가 있으면 직선 대체
-          var segStartSide = getCoordRiverSide(segment[0].lat, segment[0].lng);
+          // 강 건너는 구간 감지 (전국)
           var crosses = false;
-          for (var g = 0; g < result.geometry.length; g++) {
-            var gSide = getCoordRiverSide(result.geometry[g][0], result.geometry[g][1]);
-            if (gSide !== segStartSide) { crosses = true; break; }
+          var riverName = '';
+          if (currentCity === 'seoul') {
+            // 서울: 폴리라인 기반 정밀 감지
+            var segStartSide = getCoordRiverSide(segment[0].lat, segment[0].lng);
+            for (var g = 0; g < result.geometry.length; g++) {
+              var gSide = getCoordRiverSide(result.geometry[g][0], result.geometry[g][1]);
+              if (gSide !== segStartSide) { crosses = true; break; }
+            }
+            riverName = '한강';
+          } else {
+            // 비서울: riverCheck 축/값 기반 감지
+            var cd = CITY_DATA[currentCity];
+            if (cd && cd.riverCheck) {
+              var rc = cd.riverCheck;
+              riverName = rc.name;
+              var startAbove = (rc.axis === 'lat') ? (segment[0].lat > rc.value) : (segment[0].lng > rc.value);
+              for (var g = 0; g < result.geometry.length; g++) {
+                var ptAbove = (rc.axis === 'lat') ? (result.geometry[g][0] > rc.value) : (result.geometry[g][1] > rc.value);
+                if (ptAbove !== startAbove) { crosses = true; break; }
+              }
+            }
           }
           if (crosses) {
-            console.warn('[OSRM] 구간 ' + (i + 1) + ' 한강 통과 감지 → 직선 대체');
+            console.warn('[OSRM] 구간 ' + (i + 1) + ' ' + riverName + ' 통과 감지 → 직선 대체');
             allGeom.push([segment[0].lat, segment[0].lng]);
             allGeom.push([segment[1].lat, segment[1].lng]);
             var directDist = haversineDistance(segment[0].lat, segment[0].lng, segment[1].lat, segment[1].lng) * 1.4;
@@ -1156,12 +1189,21 @@
         console.log('[한강 필터] 전체:', HOTSPOTS.length + '개 → 같은 쪽:', filteredHotspots.length + '개');
         updateHotspotCount(filteredHotspots.length, startSide);
       } else {
-        // 비서울: 출발지 반경 내 핫스팟만 사용 (슬라이더로 반경 조절)
+        // 비서울: 출발지 반경 내 핫스팟만 사용 + 강 건너기 방지
         var searchRadius = parseInt(document.getElementById('radiusSlider').value);
         window.CUSTOM_SEARCH_RADIUS = searchRadius;
         var allWithDist = HOTSPOTS.map(function(hs) {
           return { hs: hs, dist: haversineDistance(currentStartPos.lat, currentStartPos.lng, hs.lat, hs.lng) };
         });
+        // 강 건너기 방지 필터
+        var cityData = CITY_DATA[currentCity];
+        if (cityData && cityData.riverCheck) {
+          var beforeCount = allWithDist.length;
+          allWithDist = allWithDist.filter(function(item) {
+            return isSameRiverSide(currentCity, currentStartPos.lat, currentStartPos.lng, item.hs.lat, item.hs.lng);
+          });
+          console.log('[강 필터] ' + cityData.riverCheck.name + ' 기준: ' + beforeCount + '개 → 같은 쪽: ' + allWithDist.length + '개');
+        }
         allWithDist.sort(function(a, b) { return a.dist - b.dist; });
 
         var nearby = allWithDist.filter(function(item) { return item.dist <= searchRadius; });

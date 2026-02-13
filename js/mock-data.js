@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════
-   택시내비AI — mock-data.js (전국 택시 수요 목업 데이터)
+   택시빈차내비AI — mock-data.js (전국 택시 수요 목업 데이터)
    ═══════════════════════════════════════════ */
 
 /* ── 서울시 구 데이터 ── */
@@ -42,6 +42,7 @@ var CITY_DATA = {
     center: [37.5665, 126.9780],
     zoom: 12,
     hasRiverFilter: true,
+    riverCheck: { axis: 'lat', value: 37.525, name: '한강' },
     startLocations: [
       { key: 'gangnam',         lat: 37.4979, lng: 127.0276, name: '강남역',         side: 'south' },
       { key: 'seoul_station',   lat: 37.5547, lng: 126.9707, name: '서울역',         side: 'north' },
@@ -105,6 +106,7 @@ var CITY_DATA = {
     name: '부산광역시',
     center: [35.1796, 129.0756],
     zoom: 12,
+    riverCheck: { axis: 'lng', value: 128.980, name: '낙동강' },
     startLocations: [
       { key: 'busan_st',   lat: 35.1152, lng: 129.0414, name: '부산역' },
       { key: 'seomyeon',   lat: 35.1576, lng: 129.0596, name: '서면' },
@@ -215,6 +217,7 @@ var CITY_DATA = {
     name: '대전광역시',
     center: [36.3504, 127.3845],
     zoom: 12,
+    riverCheck: { axis: 'lng', value: 127.40, name: '갑천' },
     startLocations: [
       { key: 'daejeon_st',  lat: 36.3327, lng: 127.4344, name: '대전역' },
       { key: 'dunsan',      lat: 36.3534, lng: 127.3778, name: '둔산동' },
@@ -239,6 +242,7 @@ var CITY_DATA = {
     name: '울산광역시',
     center: [35.5384, 129.3114],
     zoom: 12,
+    riverCheck: { axis: 'lat', value: 35.55, name: '태화강' },
     startLocations: [
       { key: 'ulsan_ktx',  lat: 35.5584, lng: 129.1605, name: '울산역(KTX)' },
       { key: 'seongnam',   lat: 35.5455, lng: 129.3108, name: '성남동' },
