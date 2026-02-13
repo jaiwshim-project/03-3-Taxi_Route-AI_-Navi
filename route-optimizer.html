@@ -464,7 +464,11 @@
           <div class="mb-3">
             <div class="flex items-center justify-between mb-2">
               <label class="text-xs text-gray-500 font-medium">중심지역 반경</label>
-              <span id="radiusLabel" class="text-sm font-bold text-amber-600">5km</span>
+              <div class="flex items-center gap-2">
+                <button onclick="adjustSlider('radiusSlider', -1)" class="w-6 h-6 rounded-full bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold text-sm flex items-center justify-center leading-none transition">−</button>
+                <span id="radiusLabel" class="text-sm font-bold text-amber-600 min-w-[36px] text-center">5km</span>
+                <button onclick="adjustSlider('radiusSlider', 1)" class="w-6 h-6 rounded-full bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold text-sm flex items-center justify-center leading-none transition">+</button>
+              </div>
             </div>
             <input type="range" id="radiusSlider" min="2" max="10" value="5" step="1" oninput="onRadiusChange(this.value)">
             <div class="flex justify-between text-[10px] text-gray-400 mt-1">
@@ -475,7 +479,11 @@
           <div class="mb-3">
             <div class="flex items-center justify-between mb-2">
               <label class="text-xs text-gray-500 font-medium">최대 경유지 수</label>
-              <span id="maxStopsLabel" class="text-sm font-bold text-amber-600">6개</span>
+              <div class="flex items-center gap-2">
+                <button onclick="adjustSlider('maxStopsSlider', -1)" class="w-6 h-6 rounded-full bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold text-sm flex items-center justify-center leading-none transition">−</button>
+                <span id="maxStopsLabel" class="text-sm font-bold text-amber-600 min-w-[28px] text-center">6개</span>
+                <button onclick="adjustSlider('maxStopsSlider', 1)" class="w-6 h-6 rounded-full bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold text-sm flex items-center justify-center leading-none transition">+</button>
+              </div>
             </div>
             <input type="range" id="maxStopsSlider" min="3" max="12" value="6" oninput="onMaxStopsChange(this.value)">
             <div class="flex justify-between text-[10px] text-gray-400 mt-1">
@@ -673,12 +681,12 @@
   <div id="app-footer" class="hidden"></div>
 
   <!-- ═══ 스크립트 ═══ -->
-  <script src="js/mock-data.js?v=20260213h"></script>
-  <script src="js/shared.js?v=20260213h"></script>
-  <script src="js/map-engine.js?v=20260213h"></script>
-  <script src="js/route-algorithm.js?v=20260213h"></script>
-  <script src="js/demand-engine.js?v=20260213h"></script>
-  <script src="js/public-data-api.js?v=20260213h"></script>
+  <script src="js/mock-data.js?v=20260213i"></script>
+  <script src="js/shared.js?v=20260213i"></script>
+  <script src="js/map-engine.js?v=20260213i"></script>
+  <script src="js/route-algorithm.js?v=20260213i"></script>
+  <script src="js/demand-engine.js?v=20260213i"></script>
+  <script src="js/public-data-api.js?v=20260213i"></script>
 
   <script>
   /* ═══════════════════════════════════════════
@@ -990,6 +998,18 @@
       if (startMarker) { map.removeLayer(startMarker); startMarker = null; }
     }
     drawInitialHotspots();
+  }
+
+  function adjustSlider(sliderId, delta) {
+    var slider = document.getElementById(sliderId);
+    var newVal = parseInt(slider.value) + delta;
+    newVal = Math.max(parseInt(slider.min), Math.min(parseInt(slider.max), newVal));
+    slider.value = newVal;
+    if (sliderId === 'radiusSlider') {
+      onRadiusChange(newVal);
+    } else if (sliderId === 'maxStopsSlider') {
+      onMaxStopsChange(newVal);
+    }
   }
 
   function onRadiusChange(val) {
